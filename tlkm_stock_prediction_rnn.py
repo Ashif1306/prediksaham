@@ -116,6 +116,14 @@ def clean_data(df):
     
     df = df[available]
     
+    # Bersihkan index agar valid datetime
+    df.index = pd.to_datetime(df.index, errors='coerce')
+    df = df[~df.index.isna()]
+
+    # Pastikan kolom numerik (fallback file lokal kadang terbaca sebagai string)
+    for col in available:
+        df[col] = pd.to_numeric(df[col], errors='coerce')
+
     # Hapus duplikat index
     df = df[~df.index.duplicated(keep='first')]
     
@@ -275,12 +283,10 @@ print("="*60)
 # =============================================================================
 # STEP 9-11 — Eksperimen & Evaluasi (Window 10)
 # =============================================================================
-def inverse_transform_close(scaler, values, n_features, close_idx=0):
-    """Inverse transform nilai Close (scaled) ke skala asli Rupiah."""
-    n_samples = len(values)
-    arr = np.zeros((n_samples, n_features))
-    arr[:, close_idx] = values
-    return scaler.inverse_transform(arr)[:, close_idx]
+def inverse_transform_close(scaler, values, close_idx):
+    """Inverse transform khusus kolom Close menggunakan parameter scaler yang sudah di-fit pada train."""
+    values = np.asarray(values)
+    return (values - scaler.min_[close_idx]) / scaler.scale_[close_idx]
 
 def build_model(seq_length, n_features):
     """Arsitektur RNN teroptimasi."""
@@ -303,28 +309,28 @@ def run_experiment(seq_length, train_scaled, test_scaled, scaler_global, feature
     n_features = X_train.shape[2]
     model = build_model(seq_length, n_features)
     model.compile(
-        optimizer=keras.optimizers.Adam(learning_rate=0.0005),
+        optimizer=keras.optimizers.Adam(learning_rate=0.0003),
         loss='mse',
         metrics=['mae']
     )
     
     early_stop = EarlyStopping(
         monitor='val_loss',
-        patience=15,
+        patience=20,
         restore_best_weights=True,
         verbose=0
     )
     reduce_lr = ReduceLROnPlateau(
         monitor='val_loss',
         factor=0.5,
-        patience=5,
+        patience=6,
         verbose=0
     )
     
     history = model.fit(
         X_train, y_train,
         validation_data=(X_test, y_test),
-        epochs=120,
+        epochs=150,
         batch_size=32,
         shuffle=False,
         callbacks=[early_stop, reduce_lr],
@@ -333,10 +339,8 @@ def run_experiment(seq_length, train_scaled, test_scaled, scaler_global, feature
     
     # Evaluasi dengan inverse transform
     y_pred_scaled = model.predict(X_test, verbose=0).flatten()
-    n_features_eval = len(feature_cols)
-    
-    y_actual = inverse_transform_close(scaler_global, y_test, n_features_eval, close_idx)
-    y_pred_inv = inverse_transform_close(scaler_global, y_pred_scaled, n_features_eval, close_idx)
+    y_actual = inverse_transform_close(scaler_global, y_test, close_idx)
+    y_pred_inv = inverse_transform_close(scaler_global, y_pred_scaled, close_idx)
     
     min_len = min(len(y_actual), len(y_pred_inv))
     y_actual = y_actual[:min_len]
