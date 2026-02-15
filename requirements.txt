@@ -1,0 +1,10 @@
+# TLKM Stock Prediction - RNN
+# WAJIB: Gunakan Python 3.11 atau 3.12 (TensorFlow tidak mendukung 3.14)
+# Jalankan: setup.bat untuk otomatis buat venv dengan Python 3.12
+
+numpy>=1.24.0
+pandas>=1.5.0
+matplotlib>=3.5.0
+scikit-learn>=1.2.0
+yfinance>=0.2.0
+tensorflow>=2.13.0
