@@ -173,23 +173,24 @@ def create_features(df):
     if 'Close' not in df.columns:
         raise ValueError("Kolom Close tidak ditemukan")
     
-    # Fitur tambahan yang berguna untuk time series
-    df['Returns'] = df['Close'].pct_change()
-    df['Returns'] = df['Returns'].fillna(0)
-    
-    # Log return harian (selain OHLCV dan indikator teknikal)
-    df['Log_Return'] = np.log(df['Close'] / df['Close'].shift(1))
-    df['Log_Return'] = df['Log_Return'].fillna(0)
-    
-    # Moving averages (untuk konteks)
-    df['MA_5'] = df['Close'].rolling(window=5, min_periods=1).mean()
-    df['MA_20'] = df['Close'].rolling(window=20, min_periods=1).mean()
-    
-    # Range (High - Low)
-    if 'High' in df.columns and 'Low' in df.columns:
-        df['Range'] = df['High'] - df['Low']
-    else:
-        df['Range'] = 0
+    # Gunakan OHLCV + indikator teknikal dasar untuk stabilitas generalisasi
+    df['SMA_10'] = df['Close'].rolling(window=10, min_periods=10).mean()
+    df['EMA_10'] = df['Close'].ewm(span=10, adjust=False).mean()
+
+    # RSI 14
+    delta = df['Close'].diff()
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+    avg_gain = gain.rolling(window=14, min_periods=14).mean()
+    avg_loss = loss.rolling(window=14, min_periods=14).mean()
+    rs = avg_gain / (avg_loss + 1e-8)
+    df['RSI_14'] = 100 - (100 / (1 + rs))
+
+    # MACD (12,26,9)
+    ema_12 = df['Close'].ewm(span=12, adjust=False).mean()
+    ema_26 = df['Close'].ewm(span=26, adjust=False).mean()
+    df['MACD'] = ema_12 - ema_26
+    df['MACD_SIGNAL'] = df['MACD'].ewm(span=9, adjust=False).mean()
     
     # Hapus baris dengan NaN dari rolling
     df = df.dropna()
@@ -197,7 +198,7 @@ def create_features(df):
     return df
 
 df_feat = create_features(df_clean)
-feature_cols = ['Close', 'Returns', 'Log_Return', 'MA_5', 'MA_20', 'Range']
+feature_cols = ['Open', 'High', 'Low', 'Close', 'Volume', 'SMA_10', 'EMA_10', 'RSI_14', 'MACD', 'MACD_SIGNAL']
 feature_cols = [c for c in feature_cols if c in df_feat.columns]
 
 print(f"\nFitur yang digunakan: {feature_cols}")
@@ -232,7 +233,7 @@ print("="*60)
 # =============================================================================
 # STEP 7 — Sliding Window Aman
 # =============================================================================
-def create_sequences(data, seq_length):
+def create_sequences(data, seq_length, target_idx):
     """
     Buat struktur time series dengan sliding window.
     X: (samples, timesteps, features)
@@ -241,10 +242,10 @@ def create_sequences(data, seq_length):
     X, y = [], []
     for i in range(len(data) - seq_length):
         X.append(data[i:(i + seq_length), :])
-        y.append(data[i + seq_length, 0])  # Kolom 0 = Close (target)
+        y.append(data[i + seq_length, target_idx])  # Target = kolom Close
     return np.array(X), np.array(y)
 
-print("\nSliding window: Eksperimen dengan SEQ_LENGTH = 15 dan 20")
+print("\nSliding window: SEQ_LENGTH = 10 (stabil)")
 
 print("\n" + "="*60)
 print("STEP 7: Sliding Window (fungsi siap) - SELESAI")
@@ -272,7 +273,7 @@ print("="*60)
 
 
 # =============================================================================
-# STEP 9-11 — Eksperimen & Evaluasi (Window 15 & 20)
+# STEP 9-11 — Eksperimen & Evaluasi (Window 10)
 # =============================================================================
 def inverse_transform_close(scaler, values, n_features, close_idx=0):
     """Inverse transform nilai Close (scaled) ke skala asli Rupiah."""
@@ -284,48 +285,46 @@ def inverse_transform_close(scaler, values, n_features, close_idx=0):
 def build_model(seq_length, n_features):
     """Arsitektur RNN teroptimasi."""
     return Sequential([
-        SimpleRNN(128, return_sequences=True, input_shape=(seq_length, n_features)),
-        Dropout(0.3),
-        SimpleRNN(64, return_sequences=True),
-        Dropout(0.2),
+        SimpleRNN(64, return_sequences=True, input_shape=(seq_length, n_features)),
+        Dropout(0.25),
         SimpleRNN(32),
-        Dense(32, activation='relu'),
+        Dense(16, activation='relu'),
         Dense(1)
     ])
 
-def run_experiment(seq_length, train_scaled, test_scaled, scaler_global, feature_cols, seed=SEED):
+def run_experiment(seq_length, train_scaled, test_scaled, scaler_global, feature_cols, close_idx, seed=SEED):
     """Jalankan eksperimen untuk satu window size."""
     np.random.seed(seed)
     tf.random.set_seed(seed)
     
-    X_train, y_train = create_sequences(train_scaled, seq_length)
-    X_test, y_test = create_sequences(test_scaled, seq_length)
+    X_train, y_train = create_sequences(train_scaled, seq_length, close_idx)
+    X_test, y_test = create_sequences(test_scaled, seq_length, close_idx)
     
     n_features = X_train.shape[2]
     model = build_model(seq_length, n_features)
     model.compile(
-        optimizer=keras.optimizers.Adam(learning_rate=0.0003),
+        optimizer=keras.optimizers.Adam(learning_rate=0.0005),
         loss='mse',
         metrics=['mae']
     )
     
     early_stop = EarlyStopping(
         monitor='val_loss',
-        patience=20,
+        patience=15,
         restore_best_weights=True,
         verbose=0
     )
     reduce_lr = ReduceLROnPlateau(
         monitor='val_loss',
         factor=0.5,
-        patience=7,
+        patience=5,
         verbose=0
     )
     
     history = model.fit(
         X_train, y_train,
         validation_data=(X_test, y_test),
-        epochs=150,
+        epochs=120,
         batch_size=32,
         shuffle=False,
         callbacks=[early_stop, reduce_lr],
@@ -336,8 +335,8 @@ def run_experiment(seq_length, train_scaled, test_scaled, scaler_global, feature
     y_pred_scaled = model.predict(X_test, verbose=0).flatten()
     n_features_eval = len(feature_cols)
     
-    y_actual = inverse_transform_close(scaler_global, y_test, n_features_eval, 0)
-    y_pred_inv = inverse_transform_close(scaler_global, y_pred_scaled, n_features_eval, 0)
+    y_actual = inverse_transform_close(scaler_global, y_test, n_features_eval, close_idx)
+    y_pred_inv = inverse_transform_close(scaler_global, y_pred_scaled, n_features_eval, close_idx)
     
     min_len = min(len(y_actual), len(y_pred_inv))
     y_actual = y_actual[:min_len]
@@ -356,34 +355,27 @@ def run_experiment(seq_length, train_scaled, test_scaled, scaler_global, feature
         'y_actual': y_actual, 'y_pred_inv': y_pred_inv
     }
 
-# Jalankan eksperimen untuk window 15 dan 20
-WINDOW_SIZES = [15, 20]
-results = []
+# Jalankan eksperimen untuk window 10
+WINDOW_SIZE = 10
 
 print("\n" + "="*60)
-print("STEP 9-10: EKSPERIMEN (Window 15 & 20)")
+print("STEP 9-10: EKSPERIMEN (Window 10)")
 print("="*60)
 
-for seq_len in WINDOW_SIZES:
-    print(f"\n>>> Melatih model dengan window size = {seq_len} ...")
-    res = run_experiment(seq_len, train_scaled, test_scaled, scaler_global, feature_cols)
-    results.append(res)
-    print(f"    MAPE = {res['MAPE']:.2f}% | MAE = Rp {res['MAE']:,.2f} | R² = {res['R2']:.4f}")
-
-# Pilih model terbaik berdasarkan MAPE terendah
-best_result = min(results, key=lambda x: x['MAPE'])
+print(f"\n>>> Melatih model dengan window size = {WINDOW_SIZE} ...")
+close_idx = feature_cols.index(TARGET_COL)
+best_result = run_experiment(WINDOW_SIZE, train_scaled, test_scaled, scaler_global, feature_cols, close_idx)
 best_window = best_result['seq_length']
+print(f"    MAPE = {best_result['MAPE']:.2f}% | MAE = Rp {best_result['MAE']:,.2f} | R² = {best_result['R2']:.4f}")
 
 print("\n" + "="*60)
 print("STEP 11: PERBANDINGAN & HASIL EVALUASI")
 print("="*60)
 
-# Tabel perbandingan
-print("\n--- Perbandingan Window 15 vs Window 20 ---")
+print("\n--- Hasil Evaluasi Model (Fokus Stabilitas Generalisasi) ---")
 print(f"{'Window':<10} {'MAE (Rp)':<14} {'RMSE (Rp)':<14} {'MAPE (%)':<12} {'R²':<10}")
 print("-" * 60)
-for r in results:
-    print(f"{r['seq_length']:<10} {r['MAE']:>12,.2f}  {r['RMSE']:>12,.2f}  {r['MAPE']:>10.2f}  {r['R2']:>8.4f}")
+print(f"{best_result['seq_length']:<10} {best_result['MAE']:>12,.2f}  {best_result['RMSE']:>12,.2f}  {best_result['MAPE']:>10.2f}  {best_result['R2']:>8.4f}")
 
 print("\n--- Model Terbaik (MAPE Terendah) ---")
 print(f"  Window Size : {best_window}")
