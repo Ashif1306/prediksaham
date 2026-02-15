@@ -276,7 +276,9 @@ def create_sequences(data, seq_length, target_idx):
     X, y = [], []
     for i in range(len(data) - seq_length):
         X.append(data[i:(i + seq_length), :])
-        y.append(data[i + seq_length, target_idx])  # Target = kolom Close
+        y_curr = data[i + seq_length, target_idx]      # y_true_t
+        y_prev = data[i + seq_length - 1, target_idx]  # y_true_(t-1)
+        y.append([y_curr, y_prev])
     return np.array(X), np.array(y)
 
 print("\nSliding window: SEQ_LENGTH = 10 (stabil)")
@@ -323,6 +325,53 @@ def build_model(seq_length, n_features):
         Dense(16, activation='relu'),
         Dense(1)
     ])
+
+def make_direction_aware_mse_loss(lambda_penalty=0.5, smooth_scale=10.0, epsilon=1e-7):
+    """
+    Custom loss: MSE + lambda * DirectionPenalty.
+
+    Format y_true:
+      y_true[:, 0] = y_t      (target harga absolut)
+      y_true[:, 1] = y_(t-1)  (harga aktual sebelumnya)
+
+    DirectionPenalty (forward pass) = 1 jika arah prediksi salah, 0 jika benar.
+    Agar gradien tetap informatif, dipakai straight-through estimator:
+    - nilai forward tetap hard 0/1
+    - gradien backward mengikuti aproksimasi sigmoid yang halus
+    """
+    lambda_penalty = float(lambda_penalty)
+    smooth_scale = float(smooth_scale)
+    epsilon = float(epsilon)
+
+    def loss_fn(y_true, y_pred):
+        y_true_curr = y_true[:, :1]
+        y_true_prev = y_true[:, 1:2]
+
+        mse = tf.reduce_mean(tf.square(y_true_curr - y_pred), axis=-1)
+
+        actual_delta = y_true_curr - y_true_prev
+        pred_delta = y_pred - y_true_prev
+
+        # hard penalty (0/1) sesuai definisi arah salah/benar
+        hard_penalty = tf.cast((actual_delta * pred_delta) < 0.0, y_pred.dtype)
+
+        # soft penalty stabil untuk gradien
+        score = actual_delta * pred_delta
+        score = tf.clip_by_value(score, -1e3, 1e3)
+        soft_penalty = tf.sigmoid(-smooth_scale * score / (tf.abs(actual_delta) + epsilon))
+
+        # Straight-through estimator: forward=hard, backward=soft
+        direction_penalty = hard_penalty + soft_penalty - tf.stop_gradient(soft_penalty)
+        direction_penalty = tf.reduce_mean(direction_penalty, axis=-1)
+
+        return mse + lambda_penalty * direction_penalty
+
+    return loss_fn
+
+def mae_on_absolute_target(y_true, y_pred):
+    """MAE hanya untuk target harga absolut (kolom pertama y_true)."""
+    y_true_curr = y_true[:, :1]
+    return tf.reduce_mean(tf.abs(y_true_curr - y_pred), axis=-1)
 
 def evaluate_directional_accuracy(y_test_inv, y_pred_inv):
     """
@@ -391,10 +440,11 @@ def run_experiment(seq_length, train_scaled, test_scaled, scaler_global, feature
     
     n_features = X_train.shape[2]
     model = build_model(seq_length, n_features)
+    custom_loss = make_direction_aware_mse_loss(lambda_penalty=0.5)
     model.compile(
         optimizer=keras.optimizers.Adam(learning_rate=0.0003),
-        loss='mse',
-        metrics=['mae']
+        loss=custom_loss,
+        metrics=[mae_on_absolute_target]
     )
     
     early_stop = EarlyStopping(
@@ -422,7 +472,8 @@ def run_experiment(seq_length, train_scaled, test_scaled, scaler_global, feature
     
     # Evaluasi dengan inverse transform
     y_pred_scaled = model.predict(X_test, verbose=0).flatten()
-    y_actual = inverse_transform_close(scaler_global, y_test, close_idx)
+    y_actual_scaled = y_test[:, 0]
+    y_actual = inverse_transform_close(scaler_global, y_actual_scaled, close_idx)
     y_pred_inv = inverse_transform_close(scaler_global, y_pred_scaled, close_idx)
     
     min_len = min(len(y_actual), len(y_pred_inv))
