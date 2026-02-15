@@ -298,6 +298,63 @@ def build_model(seq_length, n_features):
         Dense(1)
     ])
 
+def evaluate_directional_accuracy(y_test_inv, y_pred_inv):
+    """
+    Evaluasi Directional Accuracy berbasis arah perubahan terhadap harga aktual sebelumnya.
+
+    Definisi:
+    - Arah aktual_t   = sign(y_t - y_(t-1))
+    - Arah prediksi_t = sign(y_pred_t - y_(t-1))
+
+    Catatan alignment:
+    - t dimulai dari indeks 1 agar y_(t-1) tersedia.
+    - Jumlah sampel evaluasi = len(y_test_inv) - 1.
+    """
+    y_test_inv = np.asarray(y_test_inv).flatten()
+    y_pred_inv = np.asarray(y_pred_inv).flatten()
+
+    if len(y_test_inv) != len(y_pred_inv):
+        raise ValueError("Panjang y_test_inv dan y_pred_inv harus sama untuk evaluasi arah.")
+    if len(y_test_inv) < 2:
+        raise ValueError("Minimal butuh 2 titik data untuk menghitung arah pergerakan.")
+
+    y_prev_actual = y_test_inv[:-1]
+    y_curr_actual = y_test_inv[1:]
+    y_curr_pred = y_pred_inv[1:]
+
+    actual_sign = np.sign(y_curr_actual - y_prev_actual)
+    pred_sign = np.sign(y_curr_pred - y_prev_actual)
+
+    # Mapping biner untuk confusion matrix sederhana:
+    # >= 0 dianggap Naik, < 0 dianggap Turun.
+    actual_up = actual_sign >= 0
+    pred_up = pred_sign >= 0
+
+    naik_naik = np.sum(actual_up & pred_up)
+    turun_turun = np.sum(~actual_up & ~pred_up)
+    naik_turun = np.sum(actual_up & ~pred_up)
+    turun_naik = np.sum(~actual_up & pred_up)
+
+    total = len(actual_sign)
+    correct = naik_naik + turun_turun
+    directional_accuracy = (correct / total) * 100 if total > 0 else np.nan
+
+    confusion_matrix = {
+        'Naik-Naik': int(naik_naik),
+        'Turun-Turun': int(turun_turun),
+        'Naik-Turun': int(naik_turun),
+        'Turun-Naik': int(turun_naik)
+    }
+
+    return {
+        'directional_accuracy': directional_accuracy,
+        'correct_predictions': int(correct),
+        'total_predictions': int(total),
+        'actual_sign': actual_sign,
+        'pred_sign': pred_sign,
+        'confusion_matrix': confusion_matrix
+    }
+
 def run_experiment(seq_length, train_scaled, test_scaled, scaler_global, feature_cols, close_idx, seed=SEED):
     """Jalankan eksperimen untuk satu window size."""
     np.random.seed(seed)
@@ -392,10 +449,25 @@ print(f"  R²   : {best_result['R2']:.4f}")
 y_actual = best_result['y_actual']
 y_pred_inv = best_result['y_pred_inv']
 min_len = len(y_actual)
+
+direction_eval = evaluate_directional_accuracy(y_actual, y_pred_inv)
+
 print("\n--- Verifikasi 5 Sampel Actual vs Predicted (Rupiah) ---")
 sample_idx = np.linspace(0, min_len - 1, min(5, min_len), dtype=int)
 for i, idx in enumerate(sample_idx, 1):
     print(f"  Sampel {i}: Actual = Rp {y_actual[idx]:,.0f}  |  Predicted = Rp {y_pred_inv[idx]:,.0f}")
+
+print("\n--- Directional Accuracy ---")
+print(
+    f"Directional Accuracy = {direction_eval['directional_accuracy']:.2f}% "
+    f"({direction_eval['correct_predictions']}/{direction_eval['total_predictions']})"
+)
+
+print("\nConfusion Matrix Arah (Aktual-Prediksi):")
+print(f"  Naik-Naik   : {direction_eval['confusion_matrix']['Naik-Naik']}")
+print(f"  Turun-Turun : {direction_eval['confusion_matrix']['Turun-Turun']}")
+print(f"  Naik-Turun  : {direction_eval['confusion_matrix']['Naik-Turun']}")
+print(f"  Turun-Naik  : {direction_eval['confusion_matrix']['Turun-Naik']}")
 print("="*60)
 
 
@@ -440,7 +512,29 @@ plt.tight_layout()
 plt.savefig('tlkm_rnn_evaluation.png', dpi=150, bbox_inches='tight')
 plt.close()
 
+# Visualisasi arah aktual vs prediksi (mengikuti definisi Directional Accuracy)
+actual_direction_binary = np.where(direction_eval['actual_sign'] >= 0, 1, -1)
+pred_direction_binary = np.where(direction_eval['pred_sign'] >= 0, 1, -1)
+time_axis = np.arange(1, len(y_actual))
+
+plt.figure(figsize=(14, 4.5))
+plt.step(time_axis, actual_direction_binary, where='mid', label='Arah Aktual', linewidth=1.5)
+plt.step(time_axis, pred_direction_binary, where='mid', label='Arah Prediksi', linewidth=1.2, alpha=0.8)
+plt.yticks([-1, 1], ['Turun', 'Naik'])
+plt.ylim(-1.5, 1.5)
+plt.xlabel('Time Step')
+plt.ylabel('Arah Harga')
+plt.title(
+    f'Arah Aktual vs Prediksi | Directional Accuracy = {direction_eval["directional_accuracy"]:.2f}%'
+)
+plt.grid(True, alpha=0.3)
+plt.legend()
+plt.tight_layout()
+plt.savefig('tlkm_rnn_directional_accuracy.png', dpi=150, bbox_inches='tight')
+plt.close()
+
 print("\nGrafik disimpan ke: tlkm_rnn_evaluation.png")
+print("Grafik arah disimpan ke: tlkm_rnn_directional_accuracy.png")
 print("\n" + "="*60)
 print("STEP 12: Visualisasi - SELESAI")
 print("="*60)
