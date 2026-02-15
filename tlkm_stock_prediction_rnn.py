@@ -104,25 +104,51 @@ print("="*60)
 def clean_data(df):
     """Pembersihan data dengan operasi aman."""
     df = df.copy()
+
+    def _flatten_columns(columns):
+        """Flatten MultiIndex columns menjadi single level string."""
+        if not isinstance(columns, pd.MultiIndex):
+            return pd.Index(columns)
+
+        flattened = []
+        for col_tuple in columns.to_flat_index():
+            parts = [str(part).strip() for part in col_tuple if part is not None and str(part).strip()]
+            flattened.append('_'.join(parts))
+        return pd.Index(flattened)
+
+    # yfinance dapat mengembalikan MultiIndex; flatten dulu agar akses kolom selalu 1D
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = _flatten_columns(df.columns)
     
-    # Pastikan kolom yang dibutuhkan ada
+    # Pastikan kolom yang dibutuhkan ada, termasuk hasil flatten seperti Open_TLKM.JK
     required_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
-    available = [c for c in required_cols if c in df.columns]
-    if 'Close' not in available:
-        # Multi-level columns dari yfinance
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
-        available = [c for c in required_cols if c in df.columns]
-    
-    df = df[available]
+    selected_cols = {}
+    for base_col in required_cols:
+        candidates = [
+            col for col in df.columns
+            if col == base_col or col.startswith(f'{base_col}_')
+        ]
+        if candidates:
+            selected_cols[base_col] = candidates[0]
+
+    if not selected_cols:
+        raise ValueError(
+            f"Kolom OHLCV tidak ditemukan. Kolom tersedia: {list(df.columns)}"
+        )
+
+    df = df[list(selected_cols.values())].copy()
+    df = df.rename(columns={v: k for k, v in selected_cols.items()})
+
+    # Hindari duplikasi kolom setelah rename (mis. multi ticker)
+    if df.columns.duplicated().any():
+        df = df.T.groupby(level=0).first().T
     
     # Bersihkan index agar valid datetime
     df.index = pd.to_datetime(df.index, errors='coerce')
     df = df[~df.index.isna()]
 
-    # Pastikan kolom numerik (fallback file lokal kadang terbaca sebagai string)
-    for col in available:
-        df[col] = pd.to_numeric(df[col], errors='coerce')
+    # Pastikan semua kolom numerik aman; apply menjaga operasi per-Series (1D)
+    df = df.apply(lambda s: pd.to_numeric(s, errors='coerce'))
 
     # Hapus duplikat index
     df = df[~df.index.duplicated(keep='first')]
