@@ -23,6 +23,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime
+import joblib
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 import yfinance as yf
@@ -459,6 +460,39 @@ print("\n✓ Training selesai!")
 print(f"  Epochs trained : {len(history.history['loss'])}")
 print(f"  Final train loss: {history.history['loss'][-1]:.6f}")
 print(f"  Final val loss  : {history.history['val_loss'][-1]:.6f}")
+print("="*70)
+
+
+# =============================================================================
+# STEP 10.1 — Simpan Model & Scaler
+# =============================================================================
+def save_artifacts(model, scaler, models_dir="models"):
+    """Simpan model (.keras) dan scaler (.pkl) ke folder models/."""
+    os.makedirs(models_dir, exist_ok=True)
+
+    model_path = os.path.join(models_dir, "tlkm_rnn_model.keras")
+    scaler_path = os.path.join(models_dir, "tlkm_scaler.pkl")
+
+    model.save(model_path)
+    joblib.dump(scaler, scaler_path)
+
+    return model_path, scaler_path
+
+
+print("\n" + "="*70)
+print("STEP 10.1: Save Model & Scaler")
+print("="*70)
+
+saved_model_path, saved_scaler_path = save_artifacts(model, data_dict['scaler'])
+print("✓ Artifact berhasil disimpan")
+print(f"  Model  : {saved_model_path}")
+print(f"  Scaler : {saved_scaler_path}")
+
+print("\nContoh load ulang untuk inference:")
+print("  from tensorflow import keras")
+print("  import joblib")
+print("  model = keras.models.load_model('models/tlkm_rnn_model.keras')")
+print("  scaler = joblib.load('models/tlkm_scaler.pkl')")
 print("="*70)
 
 

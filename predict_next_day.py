@@ -50,7 +50,7 @@ from calendar_utils import get_next_trading_day, is_trading_day
 
 # Path file model dan data
 MODEL_PATH = 'models/tlkm_rnn_model.keras'
-SCALER_PATH = 'models/tlkm_rnn_model_scaler.pkl'
+SCALER_PATH = 'models/tlkm_scaler.pkl'
 DATA_PATH = 'data_tlkm_harga_saham.csv'
 PREDICTION_OUTPUT_PATH = 'predictions/latest_prediction.json'
 
