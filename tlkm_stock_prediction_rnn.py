@@ -1,8 +1,8 @@
 """
 Proyek Prediksi Harga Saham PT Telkom Indonesia (TLKM.JK)
-Menggunakan Recurrent Neural Network (RNN) - Versi Clean
+Menggunakan Recurrent Neural Network (RNN) - Versi Final
 Data: Yahoo Finance 2008 - Dinamis
-Focus: Regression Model
+Focus: Regression Model dengan Trend Analysis
 """
 
 import sys
@@ -502,6 +502,34 @@ def evaluate_regression(model, X_test, y_test, scaler, close_idx):
     }
 
 
+def calculate_trend_accuracy_1day(y_actual, y_pred):
+    """
+    Hitung akurasi arah pergerakan harian (naik/turun).
+    Metrik sederhana: apakah prediksi dan aktual sama-sama naik atau sama-sama turun.
+    """
+    y_actual = np.asarray(y_actual).flatten()
+    y_pred = np.asarray(y_pred).flatten()
+    
+    if len(y_actual) < 2:
+        raise ValueError("Minimal 2 data untuk trend 1-hari")
+    
+    # Arah pergerakan: naik (+1) atau turun (-1)
+    actual_direction = np.sign(np.diff(y_actual))
+    pred_direction = np.sign(np.diff(y_pred))
+    
+    # Hitung akurasi
+    correct = np.sum(actual_direction == pred_direction)
+    total = len(actual_direction)
+    accuracy = (correct / total) * 100
+    
+    return {
+        'n_days': 1,
+        'accuracy': accuracy,
+        'correct': correct,
+        'total': total
+    }
+
+
 def calculate_trend_accuracy_3day(y_actual, y_pred, n_days=3):
     """
     Hitung akurasi arah tren berdasarkan return kumulatif n-hari.
@@ -550,15 +578,25 @@ print(f"  RMSE (Root Mean Squared Error)  : Rp {eval_results['RMSE']:,.2f}")
 print(f"  MAPE (Mean Absolute % Error)    : {eval_results['MAPE']:.2f}%")
 print(f"  R² Score (Coefficient of Det.)  : {eval_results['R2']:.4f}")
 
-print("\n📈 Analisis Tambahan - Trend Accuracy:")
-trend_results = calculate_trend_accuracy_3day(
+print("\n📈 Analisis Tambahan - Directional Accuracy:")
+
+# Trend 1-hari (lebih relevan untuk trading)
+trend_1day = calculate_trend_accuracy_1day(
+    eval_results['y_actual'], 
+    eval_results['y_pred']
+)
+print(f"  Trend Accuracy 1-hari : {trend_1day['accuracy']:.2f}%")
+print(f"  (Prediksi arah benar  : {trend_1day['correct']}/{trend_1day['total']})")
+
+# Trend 3-hari (lebih smooth)
+trend_3day = calculate_trend_accuracy_3day(
     eval_results['y_actual'], 
     eval_results['y_pred'], 
     n_days=3
 )
-print(f"  Trend Accuracy 3-hari : {trend_results['accuracy']:.2f}%")
-print(f"  (Prediksi arah benar  : {trend_results['correct']}/{trend_results['total']})")
-print(f"  * Derived dari hasil regresi (bukan classifier terpisah)")
+print(f"  Trend Accuracy 3-hari : {trend_3day['accuracy']:.2f}%")
+print(f"  (Prediksi arah benar  : {trend_3day['correct']}/{trend_3day['total']})")
+print(f"\n  * Derived dari hasil regresi (bukan classifier terpisah)")
 
 print("\n📝 Sample Predictions (5 titik):")
 sample_indices = np.linspace(0, len(eval_results['y_actual'])-1, 5, dtype=int)
@@ -628,79 +666,57 @@ def plot_results(history, y_actual, y_pred, mape, r2, output_file='tlkm_rnn_resu
     plt.tight_layout()
     plt.savefig(output_file, dpi=150, bbox_inches='tight')
     plt.close()
+    
+    return output_file
 
 
-def main():
-    print("\nSTEP 1 — Setup Environment")
-    print(f"Seed            : {SEED}")
-    print(f"Window Size     : {WINDOW_SIZE}")
-    print(f"Train Ratio     : {TRAIN_RATIO}")
-    print(f"Learning Rate   : {LEARNING_RATE}")
+print("\n" + "="*70)
+print("STEP 12: Visualisasi Hasil")
+print("="*70)
 
-    print("\nSTEP 2 — Ambil Data")
-    df_raw = load_data()
-    print(f"Data mentah berhasil dimuat: {df_raw.shape}")
+output_file = plot_results(
+    history,
+    eval_results['y_actual'],
+    eval_results['y_pred'],
+    eval_results['MAPE'],
+    eval_results['R2']
+)
 
-    print("\nSTEP 3 — Data Cleaning")
-    df_clean = clean_data(df_raw)
-    print(f"Data setelah cleaning: {df_clean.shape}")
-
-    print("\nSTEP 4 — EDA Dasar")
-    run_basic_eda(df_clean)
-
-    print("\nSTEP 5 — Feature Engineering")
-    df_features = create_features(df_clean)
-    print(f"Data fitur final: {df_features.shape}")
-    print(f"Total fitur     : {len(df_features.columns)}")
-
-    print("\nSTEP 6 — Normalisasi (fit hanya pada train set, tanpa leakage)")
-    print("Menerapkan MinMaxScaler: fit pada train, transform train+test.")
-
-    print("\nSTEP 8 — Train-Test Split tanpa shuffle")
-    print("Split data dilakukan secara kronologis (tanpa shuffle).")
-
-    train_scaled, test_scaled, scaler, split_idx = scale_data(df_features, train_ratio=TRAIN_RATIO)
-    print(f"Split index      : {split_idx}")
-    print(f"Train shape      : {train_scaled.shape}")
-    print(f"Test shape       : {test_scaled.shape}")
-
-    target_idx = df_features.columns.get_loc(TARGET_COL)
-
-    print("\nSTEP 7 — Sliding Window")
-    X_train, y_train = create_sequences(train_scaled, window_size=WINDOW_SIZE, target_idx=target_idx)
-    X_test, y_test = create_sequences(test_scaled, window_size=WINDOW_SIZE, target_idx=target_idx)
-    print(f"X_train shape    : {X_train.shape}, y_train: {y_train.shape}")
-    print(f"X_test shape     : {X_test.shape}, y_test : {y_test.shape}")
-
-    print("\nSTEP 9 — Build Model")
-    model = build_model(window_size=WINDOW_SIZE, n_features=X_train.shape[2], learning_rate=LEARNING_RATE)
-    print("Model SimpleRNN berhasil dibangun.")
-
-    print("\nSTEP 10 — Training")
-    train_model(model, X_train, y_train)
-    print("Training selesai.")
-
-    y_pred_scaled = model.predict(X_test, verbose=0).reshape(-1)
-
-    y_test_actual = inverse_close(y_test, scaler, close_idx=target_idx)
-    y_pred_actual = inverse_close(y_pred_scaled, scaler, close_idx=target_idx)
-
-    print("\nSTEP 11 — Evaluasi Regresi")
-    metrics = evaluate_regression(y_test_actual, y_pred_actual)
-    trend_acc_3d = calculate_trend_accuracy_3day(y_test_actual, y_pred_actual)
-
-    print("\n=== HASIL EVALUASI REGRESI ===")
-    print(f"MAE   : {metrics['MAE']:.4f}")
-    print(f"RMSE  : {metrics['RMSE']:.4f}")
-    print(f"MAPE  : {metrics['MAPE']:.2f}%")
-    print(f"R2    : {metrics['R2']:.4f}")
-    print(f"Trend Accuracy 3-hari: {trend_acc_3d:.2f}%")
-
-    print("\nSTEP 12 — Visualisasi")
-    test_index = df_features.index[split_idx + WINDOW_SIZE :]
-    plot_results(test_index, y_test_actual, y_pred_actual, output_path="tlkm_rnn_evaluation.png")
-    print("Grafik evaluasi disimpan ke: tlkm_rnn_evaluation.png")
+print(f"✓ Grafik berhasil disimpan: {output_file}")
+print("\n  Grafik berisi:")
+print("    1. Training & Validation Loss")
+print("    2. Actual vs Predicted Time Series")
+print("    3. Scatter Plot (Actual vs Predicted)")
+print("    4. Error Distribution")
+print("="*70)
 
 
-if __name__ == "__main__":
-    main()
+# =============================================================================
+# RINGKASAN AKHIR
+# =============================================================================
+print("\n" + "="*70)
+print("🎯 RINGKASAN PROYEK")
+print("="*70)
+print(f"Dataset        : TLKM.JK ({df_feat.index[0].date()} - {df_feat.index[-1].date()})")
+print(f"Total Samples  : {len(df_feat)}")
+print(f"Features       : {len(FEATURE_COLS)}")
+print(f"Target         : {TARGET_COL}")
+print(f"Window Size    : {SEQ_LENGTH}")
+print(f"Train/Test     : {TRAIN_RATIO*100:.0f}% / {(1-TRAIN_RATIO)*100:.0f}%")
+print(f"\nModel          : SimpleRNN (2 layers)")
+print(f"Optimizer      : Adam (lr=0.0005)")
+print(f"Loss Function  : MSE")
+print(f"Epochs Trained : {len(history.history['loss'])}")
+print(f"\nPerforma Test Set:")
+print(f"  MAE          : Rp {eval_results['MAE']:,.2f}")
+print(f"  RMSE         : Rp {eval_results['RMSE']:,.2f}")
+print(f"  MAPE         : {eval_results['MAPE']:.2f}%")
+print(f"  R²           : {eval_results['R2']:.4f}")
+print(f"  Trend 1-hari : {trend_1day['accuracy']:.2f}%")
+print(f"  Trend 3-hari : {trend_3day['accuracy']:.2f}%")
+print(f"\nOutput Files:")
+print(f"  • {output_file}")
+print(f"  • data_tlkm_harga_saham.csv")
+print("="*70)
+print("\n✅ PROYEK SELESAI - Semua tahapan berhasil dijalankan!")
+print("="*70)
