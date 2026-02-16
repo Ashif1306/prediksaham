@@ -197,7 +197,7 @@ def load_and_prepare_data():
         print(f"  ⚠ {dropped_rows} baris dihapus karena tanggal tidak valid (NaT)")
 
     # Tetapkan kembali index hasil konversi sebagai index utama DataFrame.
-    df = df.set_index(df.index)
+    df.index = pd.DatetimeIndex(df.index)
 
     # Pengecekan tipe index untuk memastikan konversi berhasil sepenuhnya.
     if not isinstance(df.index, pd.DatetimeIndex):
@@ -215,6 +215,53 @@ def load_and_prepare_data():
 
     # Urutkan index untuk konsistensi pemrosesan time-series.
     df = df.sort_index()
+
+    # Validasi dan pembersihan kolom numerik utama agar aman untuk operasi
+    # aritmatika time-series (.diff(), .rolling(), dsb.).
+    numeric_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
+    missing_numeric_cols = [col for col in numeric_cols if col not in df.columns]
+    if missing_numeric_cols:
+        raise ValueError(
+            f"Kolom numerik wajib tidak ditemukan: {missing_numeric_cols}"
+        )
+
+    for col in numeric_cols:
+        series = df[col]
+
+        # Jika masih berbentuk string/object, bersihkan pemisah ribuan/karakter
+        # non-numerik sebelum konversi.
+        if series.dtype == 'object' or pd.api.types.is_string_dtype(series):
+            cleaned = (
+                series.astype(str)
+                .str.replace(',', '', regex=False)
+                .str.replace(r'[^0-9eE+\-.]', '', regex=True)
+            )
+            df[col] = pd.to_numeric(cleaned, errors='coerce')
+        else:
+            df[col] = pd.to_numeric(series, errors='coerce')
+
+    # Hapus baris yang gagal dikonversi menjadi numerik valid.
+    invalid_numeric_mask = df[numeric_cols].isna().any(axis=1)
+    if invalid_numeric_mask.any():
+        dropped_rows = int(invalid_numeric_mask.sum())
+        df = df.loc[~invalid_numeric_mask].copy()
+        print(
+            f"  ⚠ {dropped_rows} baris dihapus karena nilai numerik tidak valid"
+        )
+
+    # Paksa tipe float untuk seluruh kolom numerik utama.
+    df[numeric_cols] = df[numeric_cols].astype(float)
+
+    # Validasi final dtypes sebelum feature engineering.
+    non_float_cols = [
+        col for col in numeric_cols if not pd.api.types.is_float_dtype(df[col])
+    ]
+    if non_float_cols:
+        raise TypeError(
+            f"Kolom berikut bukan float setelah konversi: {non_float_cols}. "
+            f"dtypes saat ini: {df[numeric_cols].dtypes.to_dict()}"
+        )
+
     print(f"  ✓ Data loaded: {len(df)} baris")
     print(f"  ✓ Periode    : {df.index[0].date()} hingga {df.index[-1].date()}")
     
