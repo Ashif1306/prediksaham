@@ -869,15 +869,36 @@ def build_direction_classifier(seq_length, n_features):
     ])
 
 
-def run_direction_classification_experiment(seq_length, df_features, feature_cols, split_idx, seed=SEED):
+def run_direction_classification_experiment(
+    seq_length,
+    df_features,
+    feature_cols,
+    split_idx,
+    horizon_days=3,
+    seed=SEED
+):
     """Training/evaluasi model klasifikasi arah menggunakan pipeline preprocessing yang sama."""
     np.random.seed(seed)
     tf.random.set_seed(seed)
 
-    direction_target = (df_features['Close'] > df_features['Close'].shift(1)).astype(int).fillna(0)
+    if horizon_days < 1:
+        raise ValueError("horizon_days minimal 1.")
 
-    train_data = df_features.iloc[:split_idx][feature_cols].values
-    test_data = df_features.iloc[split_idx:][feature_cols].values
+    # Target biner horizon ke depan (tanpa leakage):
+    # y_t = 1 jika Close_(t+h) > Close_t, else 0
+    # Drop baris ujung yang tidak punya Close_(t+h) agar fitur-target tetap sejajar.
+    forward_close = df_features['Close'].shift(-horizon_days)
+    direction_target = (forward_close > df_features['Close']).astype(int)
+    valid_mask = forward_close.notna()
+
+    df_aligned = df_features.loc[valid_mask].copy()
+    direction_target = direction_target.loc[valid_mask]
+
+    if split_idx > len(df_aligned):
+        split_idx = int(len(df_aligned) * TRAIN_RATIO)
+
+    train_data = df_aligned.iloc[:split_idx][feature_cols].values
+    test_data = df_aligned.iloc[split_idx:][feature_cols].values
     y_train_raw = direction_target.iloc[:split_idx].values
     y_test_raw = direction_target.iloc[split_idx:].values
 
@@ -903,10 +924,15 @@ def run_direction_classification_experiment(seq_length, df_features, feature_col
     }
 
     n_classes = 2
+    imbalance_ratio = (
+        float(train_class_counts.max()) / float(train_class_counts.min())
+        if train_class_counts.min() > 0 else np.inf
+    )
+    use_class_weight = imbalance_ratio > 1.2
     class_weight = {
         cls: (train_total / (n_classes * count)) if count > 0 else 1.0
         for cls, count in train_class_counts.items()
-    }
+    } if use_class_weight else None
 
     model = build_direction_classifier(seq_length, X_train.shape[2])
     model.compile(
@@ -946,7 +972,7 @@ def run_direction_classification_experiment(seq_length, df_features, feature_col
         'mean': float(np.mean(y_pred_prob))
     }
 
-    threshold_candidates = [0.45, 0.48, 0.50, 0.52, 0.55]
+    threshold_candidates = np.round(np.arange(0.45, 0.551, 0.01), 2).tolist()
     threshold_results = []
     for threshold in threshold_candidates:
         y_pred_class_t = (y_pred_prob >= threshold).astype(int)
@@ -988,12 +1014,15 @@ def run_direction_classification_experiment(seq_length, df_features, feature_col
     )
 
     return {
+        'horizon_days': int(horizon_days),
         'seq_length': seq_length,
         'history': history,
         'model': model,
         'scaler': scaler,
         'train_class_distribution': train_class_distribution,
-        'class_weight': {int(k): float(v) for k, v in class_weight.items()},
+        'class_weight_used': bool(use_class_weight),
+        'class_imbalance_ratio': float(imbalance_ratio),
+        'class_weight': {int(k): float(v) for k, v in class_weight.items()} if class_weight is not None else None,
         'y_test': y_test,
         'y_pred_prob': y_pred_prob,
         'prob_distribution': prob_distribution,
@@ -1055,15 +1084,23 @@ print("="*60)
 print("STEP 10B: MODEL KLASIFIKASI ARAH (TERPISAH)")
 print("="*60)
 
+classification_result_h1 = run_direction_classification_experiment(
+    seq_length=WINDOW_SIZE,
+    df_features=df_feat,
+    feature_cols=feature_set_map['MOMENTUM_CORE'],
+    split_idx=split_idx,
+    horizon_days=1
+)
 classification_result = run_direction_classification_experiment(
     seq_length=WINDOW_SIZE,
     df_features=df_feat,
     feature_cols=feature_set_map['MOMENTUM_CORE'],
-    split_idx=split_idx
+    split_idx=split_idx,
+    horizon_days=3
 )
 
 print()
-print("--- Evaluasi Model Klasifikasi Arah (SimpleRNN Sigmoid) ---")
+print("--- Evaluasi Model Klasifikasi Arah (SimpleRNN Sigmoid) | Horizon 3-Hari ---")
 
 train_dist = classification_result['train_class_distribution']
 print("Distribusi kelas data train (setelah sequence):")
@@ -1076,9 +1113,16 @@ print(
     f"({train_dist['turun']['percentage']:.2f}%)"
 )
 
-print("Class weight (berdasarkan proporsi kelas train):")
-print(f"  class_weight[1] (Naik)  = {classification_result['class_weight'][1]:.4f}")
-print(f"  class_weight[0] (Turun) = {classification_result['class_weight'][0]:.4f}")
+print(
+    f"Class imbalance ratio (mayor/minor) = {classification_result['class_imbalance_ratio']:.4f} "
+    f"-> class_weight digunakan: {classification_result['class_weight_used']}"
+)
+if classification_result['class_weight_used']:
+    print("Class weight (berdasarkan proporsi kelas train):")
+    print(f"  class_weight[1] (Naik)  = {classification_result['class_weight'][1]:.4f}")
+    print(f"  class_weight[0] (Turun) = {classification_result['class_weight'][0]:.4f}")
+else:
+    print("Class weight tidak digunakan karena distribusi kelas relatif seimbang.")
 
 last_auc = classification_result['history'].history.get('auc', [np.nan])[-1]
 last_val_auc = classification_result['history'].history.get('val_auc', [np.nan])[-1]
@@ -1134,6 +1178,15 @@ for class_name in ['naik', 'turun']:
 print()
 print("Uji Signifikansi Binomial (vs p=0.5):")
 print(f"  p-value = {classification_result['binomial_significance']['p_value']:.6f}")
+
+print("\nPerbandingan separasi arah Horizon 1-Hari vs 3-Hari (MOMENTUM_CORE):")
+h1_train_auc = classification_result_h1['history'].history.get('auc', [np.nan])[-1]
+h1_val_auc = classification_result_h1['history'].history.get('val_auc', [np.nan])[-1]
+h3_train_auc = classification_result['history'].history.get('auc', [np.nan])[-1]
+h3_val_auc = classification_result['history'].history.get('val_auc', [np.nan])[-1]
+print(f"  H1 -> AUC train: {h1_train_auc:.4f}, AUC val: {h1_val_auc:.4f}, Best Macro F1: {classification_result_h1['best_threshold_metrics']['f1_score']:.4f}, Acc: {classification_result_h1['best_threshold_metrics']['accuracy']:.4f}")
+print(f"  H3 -> AUC train: {h3_train_auc:.4f}, AUC val: {h3_val_auc:.4f}, Best Macro F1: {classification_result['best_threshold_metrics']['f1_score']:.4f}, Acc: {classification_result['best_threshold_metrics']['accuracy']:.4f}")
+print(f"  Delta (H3-H1) AUC val: {(h3_val_auc - h1_val_auc):+.4f} | Macro F1: {(classification_result['best_threshold_metrics']['f1_score'] - classification_result_h1['best_threshold_metrics']['f1_score']):+.4f}")
 
 print()
 print("="*60)
