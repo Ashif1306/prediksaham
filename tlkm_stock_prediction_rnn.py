@@ -40,6 +40,12 @@ SEED = 42
 np.random.seed(SEED)
 tf.random.set_seed(SEED)
 
+# Jalankan script dari root folder project agar path relatif berikut valid.
+DATA_CSV_PATH = "data/data_tlkm_harga_saham.csv"
+MODEL_PATH = "models/tlkm_rnn_model.keras"
+SCALER_PATH = "models/tlkm_scaler.pkl"
+PLOT_PATH = "img/tlkm_rnn_results.png"
+
 print("="*70)
 print("STEP 1: Setup Environment")
 print("="*70)
@@ -76,17 +82,18 @@ def load_data():
         print(f"  Total   : {len(df)} hari trading")
         
         # Simpan ke CSV
-        output_file = "data_tlkm_harga_saham.csv"
+        output_file = DATA_CSV_PATH
+        os.makedirs(os.path.dirname(output_file), exist_ok=True)
         df.to_csv(output_file)
         print(f"  File    : {output_file}")
         
     except Exception as e:
         print(f"✗ Error: {e}")
         # Fallback ke file lokal
-        if os.path.exists("data_tlkm_harga_saham.csv"):
-            df = pd.read_csv("data_tlkm_harga_saham.csv", 
+        if os.path.exists(DATA_CSV_PATH):
+            df = pd.read_csv(DATA_CSV_PATH,
                            index_col=0, parse_dates=True)
-            print("  Menggunakan data lokal: data_tlkm_harga_saham.csv")
+            print(f"  Menggunakan data lokal: {DATA_CSV_PATH}")
         else:
             raise
     
@@ -466,12 +473,10 @@ print("="*70)
 # =============================================================================
 # STEP 10.1 — Simpan Model & Scaler
 # =============================================================================
-def save_artifacts(model, scaler, models_dir="models"):
+def save_artifacts(model, scaler, model_path=MODEL_PATH, scaler_path=SCALER_PATH):
     """Simpan model (.keras) dan scaler (.pkl) ke folder models/."""
-    os.makedirs(models_dir, exist_ok=True)
-
-    model_path = os.path.join(models_dir, "tlkm_rnn_model.keras")
-    scaler_path = os.path.join(models_dir, "tlkm_scaler.pkl")
+    os.makedirs(os.path.dirname(model_path), exist_ok=True)
+    os.makedirs(os.path.dirname(scaler_path), exist_ok=True)
 
     model.save(model_path)
     joblib.dump(scaler, scaler_path)
@@ -491,8 +496,8 @@ print(f"  Scaler : {saved_scaler_path}")
 print("\nContoh load ulang untuk inference:")
 print("  from tensorflow import keras")
 print("  import joblib")
-print("  model = keras.models.load_model('models/tlkm_rnn_model.keras')")
-print("  scaler = joblib.load('models/tlkm_scaler.pkl')")
+print(f"  model = keras.models.load_model('{MODEL_PATH}')")
+print(f"  scaler = joblib.load('{SCALER_PATH}')")
 print("="*70)
 
 
@@ -648,8 +653,9 @@ print("="*70)
 # =============================================================================
 # STEP 12 — Visualisasi
 # =============================================================================
-def plot_results(history, y_actual, y_pred, mape, r2, output_file='tlkm_rnn_results.png'):
+def plot_results(history, y_actual, y_pred, mape, r2, output_file=PLOT_PATH):
     """Visualisasi hasil training dan prediksi."""
+    os.makedirs(os.path.dirname(output_file), exist_ok=True)
     fig, axes = plt.subplots(2, 2, figsize=(14, 10))
     
     # 1. Training & Validation Loss
@@ -750,7 +756,7 @@ print(f"  Trend 1-hari : {trend_1day['accuracy']:.2f}%")
 print(f"  Trend 3-hari : {trend_3day['accuracy']:.2f}%")
 print(f"\nOutput Files:")
 print(f"  • {output_file}")
-print(f"  • data_tlkm_harga_saham.csv")
+print(f"  • {DATA_CSV_PATH}")
 print("="*70)
 print("\n✅ PROYEK SELESAI - Semua tahapan berhasil dijalankan!")
 print("="*70)
