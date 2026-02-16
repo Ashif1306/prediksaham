@@ -198,10 +198,10 @@ print("="*60)
 
 
 # =============================================================================
-# STEP 5 — Feature Engineering Stabil
+# STEP 5 — Feature Engineering Stabil + Momentum/Volatilitas
 # =============================================================================
-def create_features(df):
-    """Feature engineering yang stabil."""
+def create_features(df, add_momentum_features=False):
+    """Feature engineering stabil dengan opsi pengayaan fitur momentum/volatilitas."""
     df = df.copy()
     
     # Gunakan Close sebagai target utama
@@ -226,18 +226,47 @@ def create_features(df):
     ema_26 = df['Close'].ewm(span=26, adjust=False).mean()
     df['MACD'] = ema_12 - ema_26
     df['MACD_SIGNAL'] = df['MACD'].ewm(span=9, adjust=False).mean()
+
+    # Pengayaan fitur momentum & volatilitas (tanpa data leakage: hanya t dan masa lalu)
+    if add_momentum_features:
+        df['RETURN_1D'] = df['Close'].pct_change()
+        df['RETURN_LAG_1'] = df['RETURN_1D'].shift(1)
+        df['RETURN_LAG_2'] = df['RETURN_1D'].shift(2)
+        df['RETURN_LAG_3'] = df['RETURN_1D'].shift(3)
+        df['CUM_RETURN_3D'] = (1.0 + df['RETURN_1D']).rolling(window=3, min_periods=3).apply(np.prod, raw=True) - 1.0
+        df['CUM_RETURN_5D'] = (1.0 + df['RETURN_1D']).rolling(window=5, min_periods=5).apply(np.prod, raw=True) - 1.0
+        df['ROLL_MEAN_RETURN_3D'] = df['RETURN_1D'].rolling(window=3, min_periods=3).mean()
+        df['ROLL_STD_RETURN_5D'] = df['RETURN_1D'].rolling(window=5, min_periods=5).std()
+        df['RSI_SLOPE'] = df['RSI_14'].diff()
+
+        macd_hist = df['MACD'] - df['MACD_SIGNAL']
+        df['MACD_HIST_CHANGE'] = macd_hist.diff()
     
     # Hapus baris dengan NaN dari rolling
     df = df.dropna()
     
     return df
 
-df_feat = create_features(df_clean)
-feature_cols = ['Open', 'High', 'Low', 'Close', 'Volume', 'SMA_10', 'EMA_10', 'RSI_14', 'MACD', 'MACD_SIGNAL']
-feature_cols = [c for c in feature_cols if c in df_feat.columns]
+base_feature_cols = ['Open', 'High', 'Low', 'Close', 'Volume', 'SMA_10', 'EMA_10', 'RSI_14', 'MACD', 'MACD_SIGNAL']
+momentum_feature_cols = [
+    'RETURN_1D', 'RETURN_LAG_1', 'RETURN_LAG_2', 'RETURN_LAG_3',
+    'CUM_RETURN_3D', 'CUM_RETURN_5D', 'ROLL_MEAN_RETURN_3D', 'ROLL_STD_RETURN_5D',
+    'RSI_SLOPE', 'MACD_HIST_CHANGE'
+]
 
-print(f"\nFitur yang digunakan: {feature_cols}")
-print(f"Baris setelah feature engineering: {len(df_feat)}")
+# Bangun dataset enriched terlebih dahulu. Baseline akan menggunakan subset fitur dasar
+# dari dataset yang sama agar perbandingan adil pada periode sampel yang identik.
+df_feat_enhanced = create_features(df_clean, add_momentum_features=True)
+df_feat = df_feat_enhanced.copy()
+
+feature_set_map = {
+    'BASELINE': [c for c in base_feature_cols if c in df_feat.columns],
+    'ENHANCED': [c for c in (base_feature_cols + momentum_feature_cols) if c in df_feat.columns]
+}
+
+print(f"\nJumlah fitur baseline: {len(feature_set_map['BASELINE'])}")
+print(f"Jumlah fitur enhanced: {len(feature_set_map['ENHANCED'])}")
+print(f"Baris setelah feature engineering (aligned): {len(df_feat)}")
 
 print("\n" + "="*60)
 print("STEP 5: Feature Engineering - SELESAI")
@@ -251,10 +280,12 @@ print("="*60)
 # Scaler akan di-fit nanti setelah train-test split
 
 TARGET_COL = 'Close'
-data_for_scale = df_feat[feature_cols].values
 
-# Buat scaler global - akan di-fit pada TRAIN saja di Step 8
-scaler_global = MinMaxScaler(feature_range=(0, 1))
+# Buat scaler global per skenario - akan di-fit pada TRAIN saja di Step 8
+scaler_global_map = {
+    scenario: MinMaxScaler(feature_range=(0, 1))
+    for scenario in feature_set_map
+}
 
 # Untuk sementara, kita simpan data mentah
 # Fit scaler nanti HANYA pada train set
@@ -293,14 +324,31 @@ print("="*60)
 TRAIN_RATIO = 0.8
 
 split_idx = int(len(df_feat) * TRAIN_RATIO)
-train_data = df_feat.iloc[:split_idx][feature_cols].values
-test_data = df_feat.iloc[split_idx:][feature_cols].values
+dataset_map = {}
 
-scaler_global.fit(train_data)
-train_scaled = scaler_global.transform(train_data)
-test_scaled = scaler_global.transform(test_data)
+for scenario_name, scenario_features in feature_set_map.items():
+    train_data = df_feat.iloc[:split_idx][scenario_features].values
+    test_data = df_feat.iloc[split_idx:][scenario_features].values
 
-print(f"\nTrain data: {train_data.shape[0]} baris | Test data: {test_data.shape[0]} baris")
+    scaler = scaler_global_map[scenario_name]
+    scaler.fit(train_data)
+    train_scaled = scaler.transform(train_data)
+    test_scaled = scaler.transform(test_data)
+
+    dataset_map[scenario_name] = {
+        'feature_cols': scenario_features,
+        'train_scaled': train_scaled,
+        'test_scaled': test_scaled,
+        'scaler_global': scaler,
+        'split_idx': split_idx
+    }
+
+print(f"\nTrain/Test split index: {split_idx} ({TRAIN_RATIO*100:.0f}% train)")
+for scenario_name, dataset in dataset_map.items():
+    print(
+        f"  {scenario_name:<9} -> fitur: {len(dataset['feature_cols']):<2} | "
+        f"train: {dataset['train_scaled'].shape[0]} | test: {dataset['test_scaled'].shape[0]}"
+    )
 
 print("\n" + "="*60)
 print("STEP 8: Train-Test Split (TANPA LEAKAGE) - SELESAI")
@@ -805,59 +853,121 @@ print("\n" + "="*60)
 print("STEP 9-10: EKSPERIMEN (Window 10)")
 print("="*60)
 
-print(f"\n>>> Melatih model dengan window size = {WINDOW_SIZE} ...")
-close_idx = feature_cols.index(TARGET_COL)
-best_result = run_experiment(WINDOW_SIZE, train_scaled, test_scaled, scaler_global, feature_cols, close_idx)
-best_window = best_result['seq_length']
-print(f"    MAPE = {best_result['MAPE']:.2f}% | MAE = Rp {best_result['MAE']:,.2f} | R² = {best_result['R2']:.4f}")
+experiment_results = {}
+for scenario_name, dataset in dataset_map.items():
+    print(f"\n>>> Melatih model [{scenario_name}] dengan window size = {WINDOW_SIZE} ...")
+    close_idx = dataset['feature_cols'].index(TARGET_COL)
+    result = run_experiment(
+        WINDOW_SIZE,
+        dataset['train_scaled'],
+        dataset['test_scaled'],
+        dataset['scaler_global'],
+        dataset['feature_cols'],
+        close_idx
+    )
+    experiment_results[scenario_name] = result
+    print(
+        f"    MAPE = {result['MAPE']:.2f}% | MAE = Rp {result['MAE']:,.2f} | "
+        f"R² = {result['R2']:.4f}"
+    )
 
 print("\n" + "="*60)
 print("STEP 11: PERBANDINGAN & HASIL EVALUASI")
 print("="*60)
 
-print("\n--- Hasil Evaluasi Model (Fokus Stabilitas Generalisasi) ---")
-print(f"{'Window':<10} {'MAE (Rp)':<14} {'RMSE (Rp)':<14} {'MAPE (%)':<12} {'R²':<10}")
-print("-" * 60)
-print(f"{best_result['seq_length']:<10} {best_result['MAE']:>12,.2f}  {best_result['RMSE']:>12,.2f}  {best_result['MAPE']:>10.2f}  {best_result['R2']:>8.4f}")
+print("\n--- Hasil Evaluasi Model (Perbandingan Baseline vs Enhanced) ---")
+print(f"{'Skenario':<12} {'Window':<8} {'MAE (Rp)':<14} {'RMSE (Rp)':<14} {'MAPE (%)':<12} {'R²':<10}")
+print("-" * 76)
+for scenario_name in ['BASELINE', 'ENHANCED']:
+    result = experiment_results[scenario_name]
+    print(
+        f"{scenario_name:<12} {result['seq_length']:<8} "
+        f"{result['MAE']:>12,.2f}  {result['RMSE']:>12,.2f}  "
+        f"{result['MAPE']:>10.2f}  {result['R2']:>8.4f}"
+    )
 
-print("\n--- Model Terbaik (MAPE Terendah) ---")
+best_result = experiment_results['ENHANCED']
+best_window = best_result['seq_length']
+print("\n--- Model Aktif untuk analisis lanjutan (Enhanced Features) ---")
 print(f"  Window Size : {best_window}")
 print(f"  MAE  : Rp {best_result['MAE']:,.2f}")
 print(f"  RMSE : Rp {best_result['RMSE']:,.2f}")
 print(f"  MAPE : {best_result['MAPE']:.2f}%")
 print(f"  R²   : {best_result['R2']:.4f}")
 
-# Verifikasi 5 sampel (model terbaik)
-y_actual = best_result['y_actual']
-y_pred_inv = best_result['y_pred_inv']
+scenario_metrics = {}
+for scenario_name in ['BASELINE', 'ENHANCED']:
+    scenario_result = experiment_results[scenario_name]
+    y_actual_s = scenario_result['y_actual']
+    y_pred_inv_s = scenario_result['y_pred_inv']
+    min_len_s = len(y_actual_s)
+
+    test_indicator_df_s = df_feat.iloc[split_idx + WINDOW_SIZE:].copy().iloc[:min_len_s]
+    if len(test_indicator_df_s) != min_len_s:
+        raise ValueError(f"Alignment indikator teknikal dengan y_actual tidak sesuai untuk {scenario_name}.")
+
+    direction_eval_s = evaluate_directional_accuracy(y_actual_s, y_pred_inv_s)
+    decision_layer_output_s = build_directional_decision_layer(
+        y_pred_inv=y_pred_inv_s,
+        rsi_values=test_indicator_df_s['RSI_14'].values,
+        macd_values=test_indicator_df_s['MACD'].values,
+        macd_signal_values=test_indicator_df_s['MACD_SIGNAL'].values,
+        smooth_window=3
+    )
+    direction_eval_decision_s = evaluate_directional_accuracy_from_signs(
+        y_test_inv=y_actual_s,
+        pred_sign=decision_layer_output_s['final_sign']
+    )
+    trend_accuracy_3d_s = evaluate_trend_accuracy_n_day(y_actual_s, y_pred_inv_s, n_days=3)
+
+    scenario_metrics[scenario_name] = {
+        'direction_baseline': direction_eval_s,
+        'direction_decision': direction_eval_decision_s,
+        'trend_accuracy_3d': trend_accuracy_3d_s,
+        'decision_layer_output': decision_layer_output_s,
+        'y_actual': y_actual_s,
+        'y_pred_inv': y_pred_inv_s,
+        'test_indicator_df': test_indicator_df_s
+    }
+
+print("\n--- Perbandingan Sebelum vs Sesudah Penambahan Fitur ---")
+print(
+    f"{'Metrik':<28} {'Sebelum (Baseline)':>22} {'Sesudah (Enhanced)':>22} {'Δ':>12}"
+)
+print("-" * 88)
+comparison_rows = [
+    ('MAE (Rp)', experiment_results['BASELINE']['MAE'], experiment_results['ENHANCED']['MAE']),
+    ('MAPE (%)', experiment_results['BASELINE']['MAPE'], experiment_results['ENHANCED']['MAPE']),
+    ('R²', experiment_results['BASELINE']['R2'], experiment_results['ENHANCED']['R2']),
+    (
+        'Directional Accuracy (%)',
+        scenario_metrics['BASELINE']['direction_decision']['directional_accuracy'],
+        scenario_metrics['ENHANCED']['direction_decision']['directional_accuracy']
+    ),
+    (
+        'Trend Accuracy 3-hari (%)',
+        scenario_metrics['BASELINE']['trend_accuracy_3d']['accuracy'],
+        scenario_metrics['ENHANCED']['trend_accuracy_3d']['accuracy']
+    )
+]
+
+for metric_name, before_val, after_val in comparison_rows:
+    delta = after_val - before_val
+    print(f"{metric_name:<28} {before_val:>22.4f} {after_val:>22.4f} {delta:>+12.4f}")
+
+# Gunakan skenario enhanced sebagai baseline analisis lanjutan output/log yang sudah ada
+y_actual = scenario_metrics['ENHANCED']['y_actual']
+y_pred_inv = scenario_metrics['ENHANCED']['y_pred_inv']
 min_len = len(y_actual)
-
-# Siapkan indikator teknikal yang sejajar dengan y_actual/y_pred_inv (periode test)
-test_indicator_df = df_feat.iloc[split_idx + WINDOW_SIZE:].copy()
-test_indicator_df = test_indicator_df.iloc[:min_len]
-
-if len(test_indicator_df) != min_len:
-    raise ValueError("Alignment indikator teknikal dengan y_actual tidak sesuai.")
-
-direction_eval = evaluate_directional_accuracy(y_actual, y_pred_inv)
-
-decision_layer_output = build_directional_decision_layer(
-    y_pred_inv=y_pred_inv,
-    rsi_values=test_indicator_df['RSI_14'].values,
-    macd_values=test_indicator_df['MACD'].values,
-    macd_signal_values=test_indicator_df['MACD_SIGNAL'].values,
-    smooth_window=3
-)
-
-direction_eval_decision = evaluate_directional_accuracy_from_signs(
-    y_test_inv=y_actual,
-    pred_sign=decision_layer_output['final_sign']
-)
+test_indicator_df = scenario_metrics['ENHANCED']['test_indicator_df']
+direction_eval = scenario_metrics['ENHANCED']['direction_baseline']
+direction_eval_decision = scenario_metrics['ENHANCED']['direction_decision']
+decision_layer_output = scenario_metrics['ENHANCED']['decision_layer_output']
+trend_accuracy_3d = scenario_metrics['ENHANCED']['trend_accuracy_3d']
 
 # Evaluasi tambahan arah & dinamika pergerakan berbasis output regresi (tanpa retraining)
 actual_returns = compute_return_series(y_actual)
 pred_returns = compute_return_series(y_pred_inv)
-trend_accuracy_3d = evaluate_trend_accuracy_n_day(y_actual, y_pred_inv, n_days=3)
 da_by_magnitude = evaluate_directional_accuracy_by_magnitude(
     actual_returns=actual_returns,
     pred_returns=pred_returns,
