@@ -8,3 +8,5 @@ matplotlib>=3.5.0
 scikit-learn>=1.2.0
 yfinance>=0.2.0
 tensorflow>=2.13.0
+
+scipy>=1.10.0
