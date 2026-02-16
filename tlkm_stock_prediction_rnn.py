@@ -198,10 +198,10 @@ print("="*60)
 
 
 # =============================================================================
-# STEP 5 — Feature Engineering Stabil + Momentum/Volatilitas
+# STEP 5 — Feature Engineering Stabil + Momentum Core
 # =============================================================================
-def create_features(df, add_momentum_features=False):
-    """Feature engineering stabil dengan opsi pengayaan fitur momentum/volatilitas."""
+def create_features(df, add_momentum_core_features=False):
+    """Feature engineering stabil dengan opsi fitur Momentum Core minimalis."""
     df = df.copy()
     
     # Gunakan Close sebagai target utama
@@ -227,20 +227,13 @@ def create_features(df, add_momentum_features=False):
     df['MACD'] = ema_12 - ema_26
     df['MACD_SIGNAL'] = df['MACD'].ewm(span=9, adjust=False).mean()
 
-    # Pengayaan fitur momentum & volatilitas (tanpa data leakage: hanya t dan masa lalu)
-    if add_momentum_features:
+    # Fitur inti Momentum Core (tanpa data leakage: hanya t dan masa lalu)
+    if add_momentum_core_features:
         df['RETURN_1D'] = df['Close'].pct_change()
         df['RETURN_LAG_1'] = df['RETURN_1D'].shift(1)
         df['RETURN_LAG_2'] = df['RETURN_1D'].shift(2)
-        df['RETURN_LAG_3'] = df['RETURN_1D'].shift(3)
-        df['CUM_RETURN_3D'] = (1.0 + df['RETURN_1D']).rolling(window=3, min_periods=3).apply(np.prod, raw=True) - 1.0
-        df['CUM_RETURN_5D'] = (1.0 + df['RETURN_1D']).rolling(window=5, min_periods=5).apply(np.prod, raw=True) - 1.0
-        df['ROLL_MEAN_RETURN_3D'] = df['RETURN_1D'].rolling(window=3, min_periods=3).mean()
-        df['ROLL_STD_RETURN_5D'] = df['RETURN_1D'].rolling(window=5, min_periods=5).std()
         df['RSI_SLOPE'] = df['RSI_14'].diff()
-
-        macd_hist = df['MACD'] - df['MACD_SIGNAL']
-        df['MACD_HIST_CHANGE'] = macd_hist.diff()
+        df['ROLL_STD_RETURN_5D'] = df['RETURN_1D'].rolling(window=5, min_periods=5).std()
     
     # Hapus baris dengan NaN dari rolling
     df = df.dropna()
@@ -248,24 +241,23 @@ def create_features(df, add_momentum_features=False):
     return df
 
 base_feature_cols = ['Open', 'High', 'Low', 'Close', 'Volume', 'SMA_10', 'EMA_10', 'RSI_14', 'MACD', 'MACD_SIGNAL']
-momentum_feature_cols = [
-    'RETURN_1D', 'RETURN_LAG_1', 'RETURN_LAG_2', 'RETURN_LAG_3',
-    'CUM_RETURN_3D', 'CUM_RETURN_5D', 'ROLL_MEAN_RETURN_3D', 'ROLL_STD_RETURN_5D',
-    'RSI_SLOPE', 'MACD_HIST_CHANGE'
+momentum_core_feature_cols = [
+    'Open', 'High', 'Low', 'Close', 'Volume',
+    'RETURN_LAG_1', 'RETURN_LAG_2', 'RSI_SLOPE', 'ROLL_STD_RETURN_5D'
 ]
 
-# Bangun dataset enriched terlebih dahulu. Baseline akan menggunakan subset fitur dasar
+# Bangun dataset momentum core terlebih dahulu. Baseline akan menggunakan subset fitur dasar
 # dari dataset yang sama agar perbandingan adil pada periode sampel yang identik.
-df_feat_enhanced = create_features(df_clean, add_momentum_features=True)
-df_feat = df_feat_enhanced.copy()
+df_feat_momentum_core = create_features(df_clean, add_momentum_core_features=True)
+df_feat = df_feat_momentum_core.copy()
 
 feature_set_map = {
     'BASELINE': [c for c in base_feature_cols if c in df_feat.columns],
-    'ENHANCED': [c for c in (base_feature_cols + momentum_feature_cols) if c in df_feat.columns]
+    'MOMENTUM_CORE': [c for c in momentum_core_feature_cols if c in df_feat.columns]
 }
 
 print(f"\nJumlah fitur baseline: {len(feature_set_map['BASELINE'])}")
-print(f"Jumlah fitur enhanced: {len(feature_set_map['ENHANCED'])}")
+print(f"Jumlah fitur momentum core: {len(feature_set_map['MOMENTUM_CORE'])}")
 print(f"Baris setelah feature engineering (aligned): {len(df_feat)}")
 
 print("\n" + "="*60)
@@ -875,10 +867,10 @@ print("\n" + "="*60)
 print("STEP 11: PERBANDINGAN & HASIL EVALUASI")
 print("="*60)
 
-print("\n--- Hasil Evaluasi Model (Perbandingan Baseline vs Enhanced) ---")
+print("\n--- Hasil Evaluasi Model (Perbandingan Baseline vs Momentum Core) ---")
 print(f"{'Skenario':<12} {'Window':<8} {'MAE (Rp)':<14} {'RMSE (Rp)':<14} {'MAPE (%)':<12} {'R²':<10}")
 print("-" * 76)
-for scenario_name in ['BASELINE', 'ENHANCED']:
+for scenario_name in ['BASELINE', 'MOMENTUM_CORE']:
     result = experiment_results[scenario_name]
     print(
         f"{scenario_name:<12} {result['seq_length']:<8} "
@@ -886,9 +878,9 @@ for scenario_name in ['BASELINE', 'ENHANCED']:
         f"{result['MAPE']:>10.2f}  {result['R2']:>8.4f}"
     )
 
-best_result = experiment_results['ENHANCED']
+best_result = experiment_results['MOMENTUM_CORE']
 best_window = best_result['seq_length']
-print("\n--- Model Aktif untuk analisis lanjutan (Enhanced Features) ---")
+print("\n--- Model Aktif untuk analisis lanjutan (Momentum Core Features) ---")
 print(f"  Window Size : {best_window}")
 print(f"  MAE  : Rp {best_result['MAE']:,.2f}")
 print(f"  RMSE : Rp {best_result['RMSE']:,.2f}")
@@ -896,7 +888,7 @@ print(f"  MAPE : {best_result['MAPE']:.2f}%")
 print(f"  R²   : {best_result['R2']:.4f}")
 
 scenario_metrics = {}
-for scenario_name in ['BASELINE', 'ENHANCED']:
+for scenario_name in ['BASELINE', 'MOMENTUM_CORE']:
     scenario_result = experiment_results[scenario_name]
     y_actual_s = scenario_result['y_actual']
     y_pred_inv_s = scenario_result['y_pred_inv']
@@ -932,22 +924,22 @@ for scenario_name in ['BASELINE', 'ENHANCED']:
 
 print("\n--- Perbandingan Sebelum vs Sesudah Penambahan Fitur ---")
 print(
-    f"{'Metrik':<28} {'Sebelum (Baseline)':>22} {'Sesudah (Enhanced)':>22} {'Δ':>12}"
+    f"{'Metrik':<28} {'Sebelum (Baseline)':>22} {'Sesudah (Momentum Core)':>22} {'Δ':>12}"
 )
 print("-" * 88)
 comparison_rows = [
-    ('MAE (Rp)', experiment_results['BASELINE']['MAE'], experiment_results['ENHANCED']['MAE']),
-    ('MAPE (%)', experiment_results['BASELINE']['MAPE'], experiment_results['ENHANCED']['MAPE']),
-    ('R²', experiment_results['BASELINE']['R2'], experiment_results['ENHANCED']['R2']),
+    ('MAE (Rp)', experiment_results['BASELINE']['MAE'], experiment_results['MOMENTUM_CORE']['MAE']),
+    ('MAPE (%)', experiment_results['BASELINE']['MAPE'], experiment_results['MOMENTUM_CORE']['MAPE']),
+    ('R²', experiment_results['BASELINE']['R2'], experiment_results['MOMENTUM_CORE']['R2']),
     (
         'Directional Accuracy (%)',
         scenario_metrics['BASELINE']['direction_decision']['directional_accuracy'],
-        scenario_metrics['ENHANCED']['direction_decision']['directional_accuracy']
+        scenario_metrics['MOMENTUM_CORE']['direction_decision']['directional_accuracy']
     ),
     (
         'Trend Accuracy 3-hari (%)',
         scenario_metrics['BASELINE']['trend_accuracy_3d']['accuracy'],
-        scenario_metrics['ENHANCED']['trend_accuracy_3d']['accuracy']
+        scenario_metrics['MOMENTUM_CORE']['trend_accuracy_3d']['accuracy']
     )
 ]
 
@@ -955,15 +947,15 @@ for metric_name, before_val, after_val in comparison_rows:
     delta = after_val - before_val
     print(f"{metric_name:<28} {before_val:>22.4f} {after_val:>22.4f} {delta:>+12.4f}")
 
-# Gunakan skenario enhanced sebagai baseline analisis lanjutan output/log yang sudah ada
-y_actual = scenario_metrics['ENHANCED']['y_actual']
-y_pred_inv = scenario_metrics['ENHANCED']['y_pred_inv']
+# Gunakan skenario Momentum Core sebagai baseline analisis lanjutan output/log yang sudah ada
+y_actual = scenario_metrics['MOMENTUM_CORE']['y_actual']
+y_pred_inv = scenario_metrics['MOMENTUM_CORE']['y_pred_inv']
 min_len = len(y_actual)
-test_indicator_df = scenario_metrics['ENHANCED']['test_indicator_df']
-direction_eval = scenario_metrics['ENHANCED']['direction_baseline']
-direction_eval_decision = scenario_metrics['ENHANCED']['direction_decision']
-decision_layer_output = scenario_metrics['ENHANCED']['decision_layer_output']
-trend_accuracy_3d = scenario_metrics['ENHANCED']['trend_accuracy_3d']
+test_indicator_df = scenario_metrics['MOMENTUM_CORE']['test_indicator_df']
+direction_eval = scenario_metrics['MOMENTUM_CORE']['direction_baseline']
+direction_eval_decision = scenario_metrics['MOMENTUM_CORE']['direction_decision']
+decision_layer_output = scenario_metrics['MOMENTUM_CORE']['decision_layer_output']
+trend_accuracy_3d = scenario_metrics['MOMENTUM_CORE']['trend_accuracy_3d']
 
 # Evaluasi tambahan arah & dinamika pergerakan berbasis output regresi (tanpa retraining)
 actual_returns = compute_return_series(y_actual)
