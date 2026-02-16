@@ -118,6 +118,15 @@ def create_features(df: pd.DataFrame) -> pd.DataFrame:
     return data[feature_cols]
 
 
+def run_basic_eda(df: pd.DataFrame):
+    """Ringkasan EDA dasar untuk memantau kualitas data time series."""
+    print(f"Shape data        : {df.shape}")
+    print(f"Rentang tanggal   : {df.index.min().date()} s.d. {df.index.max().date()}")
+    print(f"Missing values    : {int(df.isna().sum().sum())}")
+    print("Statistik Close   :")
+    print(df["Close"].describe()[["min", "max", "mean", "std"]])
+
+
 def scale_data(data: pd.DataFrame, train_ratio: float = TRAIN_RATIO):
     """Split 80:20 tanpa shuffle dan fit MinMaxScaler hanya pada train set."""
     split_idx = int(len(data) * train_ratio)
@@ -224,25 +233,61 @@ def plot_results(index_test: pd.Index, y_true: np.ndarray, y_pred: np.ndarray, o
 
 
 def main():
+    print("\nSTEP 1 — Setup Environment")
+    print(f"Seed            : {SEED}")
+    print(f"Window Size     : {WINDOW_SIZE}")
+    print(f"Train Ratio     : {TRAIN_RATIO}")
+    print(f"Learning Rate   : {LEARNING_RATE}")
+
+    print("\nSTEP 2 — Ambil Data")
     df_raw = load_data()
+    print(f"Data mentah berhasil dimuat: {df_raw.shape}")
+
+    print("\nSTEP 3 — Data Cleaning")
     df_clean = clean_data(df_raw)
+    print(f"Data setelah cleaning: {df_clean.shape}")
+
+    print("\nSTEP 4 — EDA Dasar")
+    run_basic_eda(df_clean)
+
+    print("\nSTEP 5 — Feature Engineering")
     df_features = create_features(df_clean)
+    print(f"Data fitur final: {df_features.shape}")
+    print(f"Total fitur     : {len(df_features.columns)}")
+
+    print("\nSTEP 6 — Normalisasi (fit hanya pada train set, tanpa leakage)")
+    print("Menerapkan MinMaxScaler: fit pada train, transform train+test.")
+
+    print("\nSTEP 8 — Train-Test Split tanpa shuffle")
+    print("Split data dilakukan secara kronologis (tanpa shuffle).")
 
     train_scaled, test_scaled, scaler, split_idx = scale_data(df_features, train_ratio=TRAIN_RATIO)
+    print(f"Split index      : {split_idx}")
+    print(f"Train shape      : {train_scaled.shape}")
+    print(f"Test shape       : {test_scaled.shape}")
 
     target_idx = df_features.columns.get_loc(TARGET_COL)
 
+    print("\nSTEP 7 — Sliding Window")
     X_train, y_train = create_sequences(train_scaled, window_size=WINDOW_SIZE, target_idx=target_idx)
     X_test, y_test = create_sequences(test_scaled, window_size=WINDOW_SIZE, target_idx=target_idx)
+    print(f"X_train shape    : {X_train.shape}, y_train: {y_train.shape}")
+    print(f"X_test shape     : {X_test.shape}, y_test : {y_test.shape}")
 
+    print("\nSTEP 9 — Build Model")
     model = build_model(window_size=WINDOW_SIZE, n_features=X_train.shape[2], learning_rate=LEARNING_RATE)
+    print("Model SimpleRNN berhasil dibangun.")
+
+    print("\nSTEP 10 — Training")
     train_model(model, X_train, y_train)
+    print("Training selesai.")
 
     y_pred_scaled = model.predict(X_test, verbose=0).reshape(-1)
 
     y_test_actual = inverse_close(y_test, scaler, close_idx=target_idx)
     y_pred_actual = inverse_close(y_pred_scaled, scaler, close_idx=target_idx)
 
+    print("\nSTEP 11 — Evaluasi Regresi")
     metrics = evaluate_regression(y_test_actual, y_pred_actual)
     trend_acc_3d = calculate_trend_accuracy_3day(y_test_actual, y_pred_actual)
 
@@ -253,8 +298,10 @@ def main():
     print(f"R2    : {metrics['R2']:.4f}")
     print(f"Trend Accuracy 3-hari: {trend_acc_3d:.2f}%")
 
+    print("\nSTEP 12 — Visualisasi")
     test_index = df_features.index[split_idx + WINDOW_SIZE :]
     plot_results(test_index, y_test_actual, y_pred_actual, output_path="tlkm_rnn_evaluation.png")
+    print("Grafik evaluasi disimpan ke: tlkm_rnn_evaluation.png")
 
 
 if __name__ == "__main__":
