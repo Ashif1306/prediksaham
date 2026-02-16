@@ -48,10 +48,10 @@ from calendar_utils import get_next_trading_day, is_trading_day
 # KONFIGURASI GLOBAL
 # =============================================================================
 
-# Path file model dan data
+# Jalankan script dari root folder project agar path relatif berikut valid.
 MODEL_PATH = 'models/tlkm_rnn_model.keras'
 SCALER_PATH = 'models/tlkm_scaler.pkl'
-DATA_PATH = 'data_tlkm_harga_saham.csv'
+DATA_PATH = 'data/data_tlkm_harga_saham.csv'
 PREDICTION_OUTPUT_PATH = 'predictions/latest_prediction.json'
 
 # Konfigurasi model (HARUS SAMA dengan training)
