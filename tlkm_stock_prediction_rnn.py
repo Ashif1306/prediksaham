@@ -511,6 +511,100 @@ def build_directional_decision_layer(y_pred_inv, rsi_values, macd_values, macd_s
         'final_sign': final_sign
     }
 
+def compute_max_drawdown(equity_curve):
+    """Hitung maksimum drawdown (%) dari equity curve."""
+    equity_curve = pd.Series(equity_curve, dtype=float)
+    rolling_peak = equity_curve.cummax()
+    drawdown = (equity_curve / rolling_peak) - 1.0
+    return float(drawdown.min())
+
+def compute_backtest_metrics(equity_curve, strategy_returns, exposure):
+    """Ringkasan metrik performa finansial untuk strategi."""
+    equity_curve = pd.Series(equity_curve, dtype=float)
+    strategy_returns = pd.Series(strategy_returns, dtype=float)
+    exposure = pd.Series(exposure, dtype=float)
+
+    total_return = (equity_curve.iloc[-1] / equity_curve.iloc[0]) - 1.0
+    active_mask = exposure > 0
+    if active_mask.any():
+        win_rate = (strategy_returns[active_mask] > 0).mean()
+    else:
+        win_rate = np.nan
+
+    return {
+        'cumulative_return': equity_curve / equity_curve.iloc[0] - 1.0,
+        'total_return': float(total_return),
+        'win_rate': float(win_rate) if not np.isnan(win_rate) else np.nan,
+        'max_drawdown': compute_max_drawdown(equity_curve)
+    }
+
+def run_directional_backtest(price_series, signal_sign, initial_capital=100_000_000, transaction_cost=0.0015):
+    """
+    Backtest berbasis sinyal arah (>=0 buy, <0 cash) dengan tanpa leverage.
+
+    Anti look-ahead:
+    - Posisi pada hari t dibentuk dari sinyal hari t-1 (shift 1 langkah).
+    - Return hari t memakai posisi yang sudah ditentukan di akhir hari sebelumnya.
+    """
+    prices = pd.Series(price_series, dtype=float).copy()
+    if prices.isna().any():
+        raise ValueError("price_series mengandung NaN.")
+    if len(prices) < 3:
+        raise ValueError("Minimal 3 data harga dibutuhkan untuk backtest.")
+
+    signal_sign = np.asarray(signal_sign, dtype=float).flatten()
+    if len(signal_sign) != len(prices) - 1:
+        raise ValueError("Panjang signal_sign harus sama dengan len(price_series)-1.")
+
+    signal_state = pd.Series(np.where(signal_sign >= 0, 1.0, 0.0), index=prices.index[1:])
+    signal_state = pd.concat([pd.Series([0.0], index=[prices.index[0]]), signal_state])
+
+    asset_returns = prices.pct_change().fillna(0.0)
+    position = signal_state.shift(1).fillna(0.0)
+
+    turnover = position.diff().abs().fillna(position.abs())
+    strategy_returns = (position * asset_returns) - (turnover * transaction_cost)
+
+    equity_curve = initial_capital * (1.0 + strategy_returns).cumprod()
+    strategy_metrics = compute_backtest_metrics(equity_curve, strategy_returns, position)
+
+    bh_position = pd.Series(1.0, index=prices.index)
+    bh_turnover = bh_position.diff().abs().fillna(1.0)
+    bh_returns = asset_returns - (bh_turnover * transaction_cost)
+    bh_equity = initial_capital * (1.0 + bh_returns).cumprod()
+    bh_metrics = compute_backtest_metrics(bh_equity, bh_returns, bh_position)
+
+    return {
+        'prices': prices,
+        'asset_returns': asset_returns,
+        'signal_state': signal_state,
+        'position': position,
+        'strategy_returns': strategy_returns,
+        'equity_curve': equity_curve,
+        'strategy_metrics': strategy_metrics,
+        'buy_hold_returns': bh_returns,
+        'buy_hold_equity': bh_equity,
+        'buy_hold_metrics': bh_metrics,
+        'transaction_cost': transaction_cost,
+        'initial_capital': initial_capital
+    }
+
+def plot_backtest_equity_curve(backtest_result, output_path='tlkm_backtest_equity_curve.png'):
+    """Visualisasi equity curve strategi model vs buy & hold."""
+    plt.figure(figsize=(14, 5))
+    plt.plot(backtest_result['equity_curve'].index, backtest_result['equity_curve'].values,
+             label='Strategi Model (Directional Signal)', linewidth=2)
+    plt.plot(backtest_result['buy_hold_equity'].index, backtest_result['buy_hold_equity'].values,
+             label='Buy & Hold', linewidth=2, alpha=0.8)
+    plt.title('Perbandingan Equity Curve: Strategi Model vs Buy & Hold')
+    plt.xlabel('Tanggal')
+    plt.ylabel('Nilai Portofolio (Rp)')
+    plt.grid(True, alpha=0.3)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=150, bbox_inches='tight')
+    plt.close()
+
 def run_experiment(seq_length, train_scaled, test_scaled, scaler_global, feature_cols, close_idx, seed=SEED):
     """Jalankan eksperimen untuk satu window size."""
     np.random.seed(seed)
@@ -663,6 +757,43 @@ print("="*60)
 
 
 # =============================================================================
+# STEP 11B — Backtesting Finansial (Tanpa Look-Ahead Bias)
+# =============================================================================
+BACKTEST_INITIAL_CAPITAL = 100_000_000
+BACKTEST_TRANSACTION_COST = 0.0015  # 0.15% per transaksi
+
+backtest_df = df_feat.iloc[split_idx + WINDOW_SIZE:].copy().iloc[:min_len]
+backtest_prices = backtest_df['Close'].copy()
+
+backtest_result = run_directional_backtest(
+    price_series=backtest_prices,
+    signal_sign=decision_layer_output['final_sign'],
+    initial_capital=BACKTEST_INITIAL_CAPITAL,
+    transaction_cost=BACKTEST_TRANSACTION_COST
+)
+
+strategy_metrics = backtest_result['strategy_metrics']
+buy_hold_metrics = backtest_result['buy_hold_metrics']
+
+print("\n" + "="*60)
+print("STEP 11B: BACKTESTING FINANSIAL")
+print("="*60)
+print("Asumsi backtest:")
+print(f"  Modal awal        : Rp {BACKTEST_INITIAL_CAPITAL:,.0f}")
+print(f"  Biaya transaksi   : {BACKTEST_TRANSACTION_COST*100:.2f}% per transaksi")
+print("  Aturan posisi     : BUY saat sinyal naik, CASH saat sinyal turun")
+print("  Eksekusi sinyal   : t+1 (signal shift 1 hari, anti look-ahead)")
+
+print("\nPerbandingan performa periode test:")
+print(f"{'Metrik':<24} {'Strategi Model':>18} {'Buy & Hold':>18}")
+print("-" * 64)
+print(f"{'Total Return':<24} {strategy_metrics['total_return']*100:>17.2f}% {buy_hold_metrics['total_return']*100:>17.2f}%")
+print(f"{'Win Rate (hari aktif)':<24} {strategy_metrics['win_rate']*100:>17.2f}% {buy_hold_metrics['win_rate']*100:>17.2f}%")
+print(f"{'Max Drawdown':<24} {strategy_metrics['max_drawdown']*100:>17.2f}% {buy_hold_metrics['max_drawdown']*100:>17.2f}%")
+print(f"{'Nilai Akhir Equity':<24} Rp {backtest_result['equity_curve'].iloc[-1]:>14,.0f} Rp {backtest_result['buy_hold_equity'].iloc[-1]:>14,.0f}")
+
+
+# =============================================================================
 # STEP 12 — Visualisasi Final (Model Terbaik)
 # =============================================================================
 fig, axes = plt.subplots(2, 2, figsize=(14, 10))
@@ -727,8 +858,14 @@ plt.tight_layout()
 plt.savefig('tlkm_rnn_directional_accuracy.png', dpi=150, bbox_inches='tight')
 plt.close()
 
+plot_backtest_equity_curve(
+    backtest_result,
+    output_path='tlkm_backtest_equity_curve.png'
+)
+
 print("\nGrafik disimpan ke: tlkm_rnn_evaluation.png")
 print("Grafik arah disimpan ke: tlkm_rnn_directional_accuracy.png")
+print("Grafik backtest disimpan ke: tlkm_backtest_equity_curve.png")
 print("\n" + "="*60)
 print("STEP 12: Visualisasi - SELESAI")
 print("="*60)
