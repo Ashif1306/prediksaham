@@ -381,6 +381,136 @@ def evaluate_directional_accuracy(y_test_inv, y_pred_inv):
         'confusion_matrix': confusion_matrix
     }
 
+def evaluate_directional_accuracy_from_signs(y_test_inv, pred_sign):
+    """Evaluasi Directional Accuracy menggunakan sinyal arah prediksi yang sudah diproses."""
+    y_test_inv = np.asarray(y_test_inv).flatten()
+    pred_sign = np.asarray(pred_sign).flatten()
+
+    if len(y_test_inv) < 2:
+        raise ValueError("Minimal butuh 2 titik data untuk menghitung arah pergerakan.")
+
+    actual_sign = np.sign(np.diff(y_test_inv))
+    if len(pred_sign) != len(actual_sign):
+        raise ValueError("Panjang pred_sign harus sama dengan len(y_test_inv)-1.")
+
+    actual_up = actual_sign >= 0
+    pred_up = pred_sign >= 0
+
+    naik_naik = np.sum(actual_up & pred_up)
+    turun_turun = np.sum(~actual_up & ~pred_up)
+    naik_turun = np.sum(actual_up & ~pred_up)
+    turun_naik = np.sum(~actual_up & pred_up)
+
+    total = len(actual_sign)
+    correct = naik_naik + turun_turun
+    directional_accuracy = (correct / total) * 100 if total > 0 else np.nan
+
+    confusion_matrix = {
+        'Naik-Naik': int(naik_naik),
+        'Turun-Turun': int(turun_turun),
+        'Naik-Turun': int(naik_turun),
+        'Turun-Naik': int(turun_naik)
+    }
+
+    return {
+        'directional_accuracy': directional_accuracy,
+        'correct_predictions': int(correct),
+        'total_predictions': int(total),
+        'actual_sign': actual_sign,
+        'pred_sign': pred_sign,
+        'confusion_matrix': confusion_matrix
+    }
+
+def _fill_zero_sign_with_previous(sign_array):
+    """Isi nilai 0 dengan arah sebelumnya agar semua sampel tetap dihitung naik/turun."""
+    sign_array = np.asarray(sign_array, dtype=float).copy()
+    if sign_array.size == 0:
+        return sign_array
+
+    first_nonzero_idx = np.flatnonzero(sign_array)
+    default_sign = sign_array[first_nonzero_idx[0]] if len(first_nonzero_idx) > 0 else 1.0
+    prev = default_sign
+
+    for i in range(sign_array.size):
+        if sign_array[i] == 0:
+            sign_array[i] = prev
+        else:
+            prev = sign_array[i]
+    return sign_array
+
+def build_directional_decision_layer(y_pred_inv, rsi_values, macd_values, macd_signal_values, smooth_window=3):
+    """
+    Decision layer post-processing tanpa mengubah output regresi asli model.
+
+    Komponen:
+    1) Momentum confirmation: delta prediksi vs delta prediksi sebelumnya.
+    2) Smoothing ringan: rolling mean pada prediksi.
+    3) Konfirmasi indikator teknikal: RSI momentum + status MACD terhadap signal.
+    """
+    if smooth_window not in (2, 3):
+        raise ValueError("smooth_window direkomendasikan 2 atau 3.")
+
+    y_pred_inv = np.asarray(y_pred_inv).flatten()
+    rsi_values = np.asarray(rsi_values).flatten()
+    macd_values = np.asarray(macd_values).flatten()
+    macd_signal_values = np.asarray(macd_signal_values).flatten()
+
+    if not (len(y_pred_inv) == len(rsi_values) == len(macd_values) == len(macd_signal_values)):
+        raise ValueError("Panjang y_pred_inv, RSI, MACD, dan MACD_SIGNAL harus sama.")
+    if len(y_pred_inv) < 2:
+        raise ValueError("Minimal 2 titik prediksi dibutuhkan untuk membuat sinyal arah.")
+
+    pred_series = pd.Series(y_pred_inv)
+    pred_smooth = pred_series.rolling(window=smooth_window, min_periods=1).mean().to_numpy()
+
+    trend_sign = np.sign(np.diff(pred_smooth))
+    momentum_sign = np.sign(pred_smooth[1:] - pred_smooth[:-1])
+
+    trend_sign = _fill_zero_sign_with_previous(trend_sign)
+    momentum_sign = _fill_zero_sign_with_previous(momentum_sign)
+
+    # Momentum confirmation + anti false reversal sederhana
+    confirmed_sign = np.zeros_like(trend_sign)
+    confirmed_sign[0] = trend_sign[0]
+    for i in range(1, len(trend_sign)):
+        same_direction = trend_sign[i] == momentum_sign[i]
+        if same_direction:
+            confirmed_sign[i] = trend_sign[i]
+        else:
+            confirmed_sign[i] = confirmed_sign[i - 1]
+
+    rsi_momentum_sign = np.sign(np.diff(rsi_values))
+    macd_state_sign = np.sign((macd_values - macd_signal_values)[1:])
+
+    rsi_momentum_sign = _fill_zero_sign_with_previous(rsi_momentum_sign)
+    macd_state_sign = _fill_zero_sign_with_previous(macd_state_sign)
+
+    technical_vote = rsi_momentum_sign + macd_state_sign
+    technical_sign = np.where(technical_vote >= 0, 1.0, -1.0)
+
+    # Kombinasi final: validasi dengan indikator teknikal, tetap klasifikasi semua titik
+    final_sign = np.zeros_like(confirmed_sign)
+    final_sign[0] = confirmed_sign[0]
+    for i in range(len(confirmed_sign)):
+        if confirmed_sign[i] == technical_sign[i]:
+            final_sign[i] = confirmed_sign[i]
+        elif momentum_sign[i] == technical_sign[i]:
+            final_sign[i] = technical_sign[i]
+        elif i > 0:
+            final_sign[i] = final_sign[i - 1]
+        else:
+            final_sign[i] = confirmed_sign[i]
+
+    final_sign = _fill_zero_sign_with_previous(final_sign)
+
+    return {
+        'pred_smoothed': pred_smooth,
+        'trend_sign': trend_sign,
+        'momentum_sign': momentum_sign,
+        'technical_sign': technical_sign,
+        'final_sign': final_sign
+    }
+
 def run_experiment(seq_length, train_scaled, test_scaled, scaler_global, feature_cols, close_idx, seed=SEED):
     """Jalankan eksperimen untuk satu window size."""
     np.random.seed(seed)
@@ -477,7 +607,27 @@ y_actual = best_result['y_actual']
 y_pred_inv = best_result['y_pred_inv']
 min_len = len(y_actual)
 
+# Siapkan indikator teknikal yang sejajar dengan y_actual/y_pred_inv (periode test)
+test_indicator_df = df_feat.iloc[split_idx + WINDOW_SIZE:].copy()
+test_indicator_df = test_indicator_df.iloc[:min_len]
+
+if len(test_indicator_df) != min_len:
+    raise ValueError("Alignment indikator teknikal dengan y_actual tidak sesuai.")
+
 direction_eval = evaluate_directional_accuracy(y_actual, y_pred_inv)
+
+decision_layer_output = build_directional_decision_layer(
+    y_pred_inv=y_pred_inv,
+    rsi_values=test_indicator_df['RSI_14'].values,
+    macd_values=test_indicator_df['MACD'].values,
+    macd_signal_values=test_indicator_df['MACD_SIGNAL'].values,
+    smooth_window=3
+)
+
+direction_eval_decision = evaluate_directional_accuracy_from_signs(
+    y_test_inv=y_actual,
+    pred_sign=decision_layer_output['final_sign']
+)
 
 print("\n--- Verifikasi 5 Sampel Actual vs Predicted (Rupiah) ---")
 sample_idx = np.linspace(0, min_len - 1, min(5, min_len), dtype=int)
@@ -486,15 +636,29 @@ for i, idx in enumerate(sample_idx, 1):
 
 print("\n--- Directional Accuracy ---")
 print(
-    f"Directional Accuracy = {direction_eval['directional_accuracy']:.2f}% "
+    f"Baseline (tanpa decision layer) = {direction_eval['directional_accuracy']:.2f}% "
     f"({direction_eval['correct_predictions']}/{direction_eval['total_predictions']})"
 )
+print(
+    f"Setelah decision layer         = {direction_eval_decision['directional_accuracy']:.2f}% "
+    f"({direction_eval_decision['correct_predictions']}/{direction_eval_decision['total_predictions']})"
+)
+print(
+    f"Perubahan Directional Accuracy = "
+    f"{direction_eval_decision['directional_accuracy'] - direction_eval['directional_accuracy']:+.2f} poin"
+)
 
-print("\nConfusion Matrix Arah (Aktual-Prediksi):")
+print("\nConfusion Matrix Arah Baseline (Aktual-Prediksi):")
 print(f"  Naik-Naik   : {direction_eval['confusion_matrix']['Naik-Naik']}")
 print(f"  Turun-Turun : {direction_eval['confusion_matrix']['Turun-Turun']}")
 print(f"  Naik-Turun  : {direction_eval['confusion_matrix']['Naik-Turun']}")
 print(f"  Turun-Naik  : {direction_eval['confusion_matrix']['Turun-Naik']}")
+
+print("\nConfusion Matrix Arah Setelah Decision Layer:")
+print(f"  Naik-Naik   : {direction_eval_decision['confusion_matrix']['Naik-Naik']}")
+print(f"  Turun-Turun : {direction_eval_decision['confusion_matrix']['Turun-Turun']}")
+print(f"  Naik-Turun  : {direction_eval_decision['confusion_matrix']['Naik-Turun']}")
+print(f"  Turun-Naik  : {direction_eval_decision['confusion_matrix']['Turun-Naik']}")
 print("="*60)
 
 
@@ -539,20 +703,23 @@ plt.tight_layout()
 plt.savefig('tlkm_rnn_evaluation.png', dpi=150, bbox_inches='tight')
 plt.close()
 
-# Visualisasi arah aktual vs prediksi (mengikuti definisi Directional Accuracy)
+# Visualisasi arah aktual vs prediksi (baseline vs decision layer)
 actual_direction_binary = np.where(direction_eval['actual_sign'] >= 0, 1, -1)
 pred_direction_binary = np.where(direction_eval['pred_sign'] >= 0, 1, -1)
+pred_direction_decision_binary = np.where(direction_eval_decision['pred_sign'] >= 0, 1, -1)
 time_axis = np.arange(1, len(y_actual))
 
 plt.figure(figsize=(14, 4.5))
 plt.step(time_axis, actual_direction_binary, where='mid', label='Arah Aktual', linewidth=1.5)
-plt.step(time_axis, pred_direction_binary, where='mid', label='Arah Prediksi', linewidth=1.2, alpha=0.8)
+plt.step(time_axis, pred_direction_binary, where='mid', label='Arah Prediksi (Baseline)', linewidth=1.2, alpha=0.8)
+plt.step(time_axis, pred_direction_decision_binary, where='mid', label='Arah Prediksi (Decision Layer)', linewidth=1.2, alpha=0.8)
 plt.yticks([-1, 1], ['Turun', 'Naik'])
 plt.ylim(-1.5, 1.5)
 plt.xlabel('Time Step')
 plt.ylabel('Arah Harga')
 plt.title(
-    f'Arah Aktual vs Prediksi | Directional Accuracy = {direction_eval["directional_accuracy"]:.2f}%'
+    f'Arah Aktual vs Prediksi | Baseline={direction_eval["directional_accuracy"]:.2f}% '
+    f'| Decision Layer={direction_eval_decision["directional_accuracy"]:.2f}%'
 )
 plt.grid(True, alpha=0.3)
 plt.legend()
