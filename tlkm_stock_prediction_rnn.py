@@ -28,6 +28,7 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 import yfinance as yf
 import os
+from scipy.stats import pearsonr, binomtest
 
 # TensorFlow/Keras
 import tensorflow as tf
@@ -421,6 +422,136 @@ def evaluate_directional_accuracy_from_signs(y_test_inv, pred_sign):
         'confusion_matrix': confusion_matrix
     }
 
+def compute_return_series(price_series):
+    """Hitung return sederhana dari deret harga dengan panjang output len(price_series)-1."""
+    price_series = np.asarray(price_series, dtype=float).flatten()
+    if len(price_series) < 2:
+        raise ValueError("Minimal butuh 2 titik harga untuk menghitung return.")
+    return np.diff(price_series) / (price_series[:-1] + 1e-12)
+
+def evaluate_trend_accuracy_n_day(y_actual, y_pred, n_days=3):
+    """Akurasi arah tren berdasarkan tanda return kumulatif n-hari aktual vs prediksi."""
+    y_actual = np.asarray(y_actual, dtype=float).flatten()
+    y_pred = np.asarray(y_pred, dtype=float).flatten()
+
+    if len(y_actual) != len(y_pred):
+        raise ValueError("Panjang y_actual dan y_pred harus sama.")
+    if len(y_actual) <= n_days:
+        raise ValueError(f"Minimal butuh {n_days + 1} titik data untuk tren {n_days}-hari.")
+
+    actual_cumret = (y_actual[n_days:] / (y_actual[:-n_days] + 1e-12)) - 1.0
+    pred_cumret = (y_pred[n_days:] / (y_pred[:-n_days] + 1e-12)) - 1.0
+
+    actual_sign = np.sign(actual_cumret)
+    pred_sign = np.sign(pred_cumret)
+
+    accuracy = np.mean(actual_sign == pred_sign) * 100
+    return {
+        'n_days': n_days,
+        'accuracy': float(accuracy),
+        'total_samples': int(len(actual_sign)),
+        'correct_samples': int(np.sum(actual_sign == pred_sign)),
+        'actual_sign': actual_sign,
+        'pred_sign': pred_sign
+    }
+
+def evaluate_directional_accuracy_by_magnitude(actual_returns, pred_returns, small_th=0.003, medium_th=0.01):
+    """Hitung Directional Accuracy per kategori magnitude return aktual."""
+    actual_returns = np.asarray(actual_returns, dtype=float).flatten()
+    pred_returns = np.asarray(pred_returns, dtype=float).flatten()
+
+    if len(actual_returns) != len(pred_returns):
+        raise ValueError("Panjang actual_returns dan pred_returns harus sama.")
+
+    abs_returns = np.abs(actual_returns)
+    categories = {
+        f'kecil(<{small_th*100:.1f}%)': abs_returns < small_th,
+        f'sedang({small_th*100:.1f}%-{medium_th*100:.1f}%)': (abs_returns >= small_th) & (abs_returns <= medium_th),
+        f'besar(>{medium_th*100:.1f}%)': abs_returns > medium_th
+    }
+
+    actual_sign = np.sign(actual_returns)
+    pred_sign = np.sign(pred_returns)
+
+    result = {}
+    for category_name, mask in categories.items():
+        total = int(np.sum(mask))
+        if total == 0:
+            result[category_name] = {'accuracy': np.nan, 'correct': 0, 'total': 0}
+            continue
+        correct = int(np.sum(actual_sign[mask] == pred_sign[mask]))
+        result[category_name] = {
+            'accuracy': (correct / total) * 100,
+            'correct': correct,
+            'total': total
+        }
+    return result
+
+def evaluate_return_correlation(actual_returns, pred_returns):
+    """Pearson correlation antara return aktual dan return prediksi."""
+    actual_returns = np.asarray(actual_returns, dtype=float).flatten()
+    pred_returns = np.asarray(pred_returns, dtype=float).flatten()
+
+    if len(actual_returns) != len(pred_returns):
+        raise ValueError("Panjang actual_returns dan pred_returns harus sama.")
+
+    corr, p_value = pearsonr(actual_returns, pred_returns)
+    return {'pearson_correlation': float(corr), 'p_value': float(p_value)}
+
+def evaluate_directional_significance(correct_predictions, total_predictions, p_random=0.5):
+    """Uji signifikansi binomial untuk Directional Accuracy vs tebakan acak."""
+    if total_predictions <= 0:
+        raise ValueError("total_predictions harus lebih besar dari 0.")
+    test_result = binomtest(k=correct_predictions, n=total_predictions, p=p_random, alternative='two-sided')
+    return {
+        'p_value': float(test_result.pvalue),
+        'expected_accuracy_random': p_random * 100
+    }
+
+def compute_direction_classification_report(actual_sign, pred_sign):
+    """Confusion matrix + precision/recall/F1 untuk arah Naik dan Turun."""
+    actual_sign = np.asarray(actual_sign, dtype=float).flatten()
+    pred_sign = np.asarray(pred_sign, dtype=float).flatten()
+
+    if len(actual_sign) != len(pred_sign):
+        raise ValueError("Panjang actual_sign dan pred_sign harus sama.")
+
+    actual_up = actual_sign >= 0
+    pred_up = pred_sign >= 0
+
+    tp_up = int(np.sum(actual_up & pred_up))
+    fp_up = int(np.sum(~actual_up & pred_up))
+    fn_up = int(np.sum(actual_up & ~pred_up))
+    tn_up = int(np.sum(~actual_up & ~pred_up))
+
+    tp_down = tn_up
+    fp_down = fn_up
+    fn_down = fp_up
+
+    def _safe_div(num, den):
+        return (num / den) if den > 0 else np.nan
+
+    precision_up = _safe_div(tp_up, tp_up + fp_up)
+    recall_up = _safe_div(tp_up, tp_up + fn_up)
+    f1_up = _safe_div(2 * precision_up * recall_up, precision_up + recall_up) if not np.isnan(precision_up + recall_up) and (precision_up + recall_up) > 0 else np.nan
+
+    precision_down = _safe_div(tp_down, tp_down + fp_down)
+    recall_down = _safe_div(tp_down, tp_down + fn_down)
+    f1_down = _safe_div(2 * precision_down * recall_down, precision_down + recall_down) if not np.isnan(precision_down + recall_down) and (precision_down + recall_down) > 0 else np.nan
+
+    return {
+        'confusion_matrix': {
+            'actual_naik_pred_naik': tp_up,
+            'actual_naik_pred_turun': fn_up,
+            'actual_turun_pred_naik': fp_up,
+            'actual_turun_pred_turun': tn_up
+        },
+        'metrics': {
+            'naik': {'precision': precision_up, 'recall': recall_up, 'f1_score': f1_up},
+            'turun': {'precision': precision_down, 'recall': recall_down, 'f1_score': f1_down}
+        }
+    }
+
 def _fill_zero_sign_with_previous(sign_array):
     """Isi nilai 0 dengan arah sebelumnya agar semua sampel tetap dihitung naik/turun."""
     sign_array = np.asarray(sign_array, dtype=float).copy()
@@ -723,6 +854,31 @@ direction_eval_decision = evaluate_directional_accuracy_from_signs(
     pred_sign=decision_layer_output['final_sign']
 )
 
+# Evaluasi tambahan arah & dinamika pergerakan berbasis output regresi (tanpa retraining)
+actual_returns = compute_return_series(y_actual)
+pred_returns = compute_return_series(y_pred_inv)
+trend_accuracy_3d = evaluate_trend_accuracy_n_day(y_actual, y_pred_inv, n_days=3)
+da_by_magnitude = evaluate_directional_accuracy_by_magnitude(
+    actual_returns=actual_returns,
+    pred_returns=pred_returns,
+    small_th=0.003,
+    medium_th=0.01
+)
+return_corr = evaluate_return_correlation(actual_returns, pred_returns)
+binomial_significance = evaluate_directional_significance(
+    correct_predictions=direction_eval_decision['correct_predictions'],
+    total_predictions=direction_eval_decision['total_predictions'],
+    p_random=0.5
+)
+classification_report_baseline = compute_direction_classification_report(
+    actual_sign=direction_eval['actual_sign'],
+    pred_sign=direction_eval['pred_sign']
+)
+classification_report_decision = compute_direction_classification_report(
+    actual_sign=direction_eval_decision['actual_sign'],
+    pred_sign=direction_eval_decision['pred_sign']
+)
+
 print("\n--- Verifikasi 5 Sampel Actual vs Predicted (Rupiah) ---")
 sample_idx = np.linspace(0, min_len - 1, min(5, min_len), dtype=int)
 for i, idx in enumerate(sample_idx, 1):
@@ -753,6 +909,50 @@ print(f"  Naik-Naik   : {direction_eval_decision['confusion_matrix']['Naik-Naik'
 print(f"  Turun-Turun : {direction_eval_decision['confusion_matrix']['Turun-Turun']}")
 print(f"  Naik-Turun  : {direction_eval_decision['confusion_matrix']['Naik-Turun']}")
 print(f"  Turun-Naik  : {direction_eval_decision['confusion_matrix']['Turun-Naik']}")
+
+print("\n--- Trend Accuracy 3-Hari ---")
+print(
+    f"Trend Accuracy 3-hari = {trend_accuracy_3d['accuracy']:.2f}% "
+    f"({trend_accuracy_3d['correct_samples']}/{trend_accuracy_3d['total_samples']})"
+)
+
+print("\n--- Directional Accuracy berdasarkan Magnitude Return ---")
+for cat_name, cat_metric in da_by_magnitude.items():
+    if cat_metric['total'] == 0:
+        print(f"  {cat_name:<22}: n=0 (tidak ada sampel)")
+    else:
+        print(
+            f"  {cat_name:<22}: {cat_metric['accuracy']:.2f}% "
+            f"({cat_metric['correct']}/{cat_metric['total']})"
+        )
+
+print("\n--- Korelasi Return Aktual vs Prediksi ---")
+print(f"Pearson correlation = {return_corr['pearson_correlation']:.4f}")
+print(f"p-value             = {return_corr['p_value']:.6f}")
+
+print("\n--- Uji Signifikansi Binomial (Directional Accuracy vs Acak p=0.5) ---")
+print(f"Directional Accuracy (decision layer) = {direction_eval_decision['directional_accuracy']:.2f}%")
+print(f"Expected random accuracy             = {binomial_significance['expected_accuracy_random']:.2f}%")
+print(f"p-value (binomial test)              = {binomial_significance['p_value']:.6f}")
+
+print("\n--- Klasifikasi Arah: Precision, Recall, F1 ---")
+for label, report in [('Baseline', classification_report_baseline), ('Decision Layer', classification_report_decision)]:
+    cm = report['confusion_matrix']
+    met_up = report['metrics']['naik']
+    met_down = report['metrics']['turun']
+
+    print(f"\n{label}:")
+    print("  Confusion Matrix (Aktual x Prediksi):")
+    print(f"    Aktual Naik  -> Pred Naik : {cm['actual_naik_pred_naik']}")
+    print(f"    Aktual Naik  -> Pred Turun: {cm['actual_naik_pred_turun']}")
+    print(f"    Aktual Turun -> Pred Naik : {cm['actual_turun_pred_naik']}")
+    print(f"    Aktual Turun -> Pred Turun: {cm['actual_turun_pred_turun']}")
+
+    print("  Metrik kelas Naik:")
+    print(f"    Precision: {met_up['precision']:.4f} | Recall: {met_up['recall']:.4f} | F1: {met_up['f1_score']:.4f}")
+    print("  Metrik kelas Turun:")
+    print(f"    Precision: {met_down['precision']:.4f} | Recall: {met_down['recall']:.4f} | F1: {met_down['f1_score']:.4f}")
+
 print("="*60)
 
 
