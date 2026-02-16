@@ -178,8 +178,43 @@ def load_and_prepare_data():
             f"Pastikan Anda sudah menjalankan training untuk generate data!"
         )
     
-    # Load data
-    df = pd.read_csv(DATA_PATH, index_col=0, parse_dates=True)
+    # Load data dari CSV dengan prioritas parsing kolom tanggal.
+    # Catatan: beberapa CSV hasil export dapat menyimpan tanggal sebagai string,
+    # sehingga validasi dan konversi eksplisit tetap diperlukan setelah read_csv.
+    df = pd.read_csv(DATA_PATH, index_col=0, parse_dates=[0])
+
+    # Pastikan index bertipe datetime agar API datetime (mis. .date(), .weekday())
+    # dapat digunakan tanpa error.
+    if not isinstance(df.index, pd.DatetimeIndex):
+        df.index = pd.to_datetime(df.index, errors='coerce')
+
+    # Hapus baris dengan index tanggal tidak valid (NaT) yang mungkin muncul dari
+    # metadata/header tambahan pada file CSV.
+    invalid_index_mask = df.index.isna()
+    if invalid_index_mask.any():
+        dropped_rows = int(invalid_index_mask.sum())
+        df = df.loc[~invalid_index_mask].copy()
+        print(f"  ⚠ {dropped_rows} baris dihapus karena tanggal tidak valid (NaT)")
+
+    # Tetapkan kembali index hasil konversi sebagai index utama DataFrame.
+    df = df.set_index(df.index)
+
+    # Pengecekan tipe index untuk memastikan konversi berhasil sepenuhnya.
+    if not isinstance(df.index, pd.DatetimeIndex):
+        raise TypeError(
+            "Index DataFrame gagal dikonversi ke DatetimeIndex. "
+            "Periksa format kolom tanggal pada CSV."
+        )
+
+    # Verifikasi elemen index bertipe pandas.Timestamp.
+    if len(df.index) > 0 and not isinstance(df.index[0], pd.Timestamp):
+        raise TypeError(
+            "Elemen index bukan pandas.Timestamp setelah konversi. "
+            "Pastikan kolom tanggal terbaca dengan benar."
+        )
+
+    # Urutkan index untuk konsistensi pemrosesan time-series.
+    df = df.sort_index()
     print(f"  ✓ Data loaded: {len(df)} baris")
     print(f"  ✓ Periode    : {df.index[0].date()} hingga {df.index[-1].date()}")
     
