@@ -25,7 +25,14 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime
 from sklearn.preprocessing import MinMaxScaler
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from sklearn.metrics import (
+    mean_absolute_error,
+    mean_squared_error,
+    r2_score,
+    accuracy_score,
+    precision_recall_fscore_support,
+    confusion_matrix
+)
 import yfinance as yf
 import os
 from scipy.stats import pearsonr, binomtest
@@ -838,16 +845,136 @@ def run_experiment(seq_length, train_scaled, test_scaled, scaler_global, feature
         'y_actual': y_actual, 'y_pred_inv': y_pred_inv
     }
 
+
+def create_classification_sequences(data, labels, seq_length):
+    """Buat sequence untuk klasifikasi arah dengan target label biner terpisah."""
+    X, y = [], []
+    for i in range(len(data) - seq_length):
+        X.append(data[i:(i + seq_length), :])
+        y.append(labels[i + seq_length])
+    return np.array(X), np.array(y)
+
+
+def build_direction_classifier(seq_length, n_features):
+    """Arsitektur SimpleRNN klasifikasi arah (terpisah dari model regresi)."""
+    return Sequential([
+        SimpleRNN(64, return_sequences=True, input_shape=(seq_length, n_features)),
+        Dropout(0.25),
+        SimpleRNN(32),
+        Dense(16, activation='relu'),
+        Dense(1, activation='sigmoid')
+    ])
+
+
+def run_direction_classification_experiment(seq_length, df_features, feature_cols, split_idx, seed=SEED):
+    """Training/evaluasi model klasifikasi arah menggunakan pipeline preprocessing yang sama."""
+    np.random.seed(seed)
+    tf.random.set_seed(seed)
+
+    direction_target = (df_features['Close'] > df_features['Close'].shift(1)).astype(int).fillna(0)
+
+    train_data = df_features.iloc[:split_idx][feature_cols].values
+    test_data = df_features.iloc[split_idx:][feature_cols].values
+    y_train_raw = direction_target.iloc[:split_idx].values
+    y_test_raw = direction_target.iloc[split_idx:].values
+
+    scaler = MinMaxScaler(feature_range=(0, 1))
+    scaler.fit(train_data)
+    train_scaled = scaler.transform(train_data)
+    test_scaled = scaler.transform(test_data)
+
+    X_train, y_train = create_classification_sequences(train_scaled, y_train_raw, seq_length)
+    X_test, y_test = create_classification_sequences(test_scaled, y_test_raw, seq_length)
+
+    model = build_direction_classifier(seq_length, X_train.shape[2])
+    model.compile(
+        optimizer=keras.optimizers.Adam(learning_rate=0.0005),
+        loss='binary_crossentropy',
+        metrics=['accuracy']
+    )
+
+    early_stop = EarlyStopping(
+        monitor='val_loss',
+        patience=20,
+        restore_best_weights=True,
+        verbose=0
+    )
+    reduce_lr = ReduceLROnPlateau(
+        monitor='val_loss',
+        factor=0.5,
+        patience=6,
+        verbose=0
+    )
+
+    history = model.fit(
+        X_train, y_train,
+        validation_data=(X_test, y_test),
+        epochs=150,
+        batch_size=32,
+        shuffle=False,
+        callbacks=[early_stop, reduce_lr],
+        verbose=0
+    )
+
+    y_pred_prob = model.predict(X_test, verbose=0).flatten()
+    y_pred_class = (y_pred_prob >= 0.5).astype(int)
+
+    overall_accuracy = accuracy_score(y_test, y_pred_class)
+    precision, recall, f1, _ = precision_recall_fscore_support(
+        y_test, y_pred_class, labels=[1, 0], zero_division=0
+    )
+    cm = confusion_matrix(y_test, y_pred_class, labels=[1, 0])
+
+    correct_predictions = int(np.sum(y_test == y_pred_class))
+    total_predictions = int(len(y_test))
+    significance = evaluate_directional_significance(
+        correct_predictions=correct_predictions,
+        total_predictions=total_predictions,
+        p_random=0.5
+    )
+
+    return {
+        'seq_length': seq_length,
+        'history': history,
+        'model': model,
+        'scaler': scaler,
+        'y_test': y_test,
+        'y_pred_prob': y_pred_prob,
+        'y_pred_class': y_pred_class,
+        'overall_accuracy': float(overall_accuracy),
+        'directional_accuracy': float(overall_accuracy * 100),
+        'metrics': {
+            'naik': {
+                'precision': float(precision[0]),
+                'recall': float(recall[0]),
+                'f1_score': float(f1[0])
+            },
+            'turun': {
+                'precision': float(precision[1]),
+                'recall': float(recall[1]),
+                'f1_score': float(f1[1])
+            }
+        },
+        'confusion_matrix': {
+            'labels': ['Naik (1)', 'Turun (0)'],
+            'matrix': cm
+        },
+        'correct_predictions': correct_predictions,
+        'total_predictions': total_predictions,
+        'binomial_significance': significance
+    }
+
 # Jalankan eksperimen untuk window 10
 WINDOW_SIZE = 10
-
-print("\n" + "="*60)
+print()
+print("="*60)
 print("STEP 9-10: EKSPERIMEN (Window 10)")
 print("="*60)
 
 experiment_results = {}
 for scenario_name, dataset in dataset_map.items():
-    print(f"\n>>> Melatih model [{scenario_name}] dengan window size = {WINDOW_SIZE} ...")
+    print()
+    print(f">>> Melatih model [{scenario_name}] dengan window size = {WINDOW_SIZE} ...")
     close_idx = dataset['feature_cols'].index(TARGET_COL)
     result = run_experiment(
         WINDOW_SIZE,
@@ -863,7 +990,48 @@ for scenario_name, dataset in dataset_map.items():
         f"R² = {result['R2']:.4f}"
     )
 
-print("\n" + "="*60)
+print()
+print("="*60)
+print("STEP 10B: MODEL KLASIFIKASI ARAH (TERPISAH)")
+print("="*60)
+
+classification_result = run_direction_classification_experiment(
+    seq_length=WINDOW_SIZE,
+    df_features=df_feat,
+    feature_cols=feature_set_map['MOMENTUM_CORE'],
+    split_idx=split_idx
+)
+
+print()
+print("--- Evaluasi Model Klasifikasi Arah (SimpleRNN Sigmoid) ---")
+print(f"Directional Accuracy keseluruhan : {classification_result['directional_accuracy']:.2f}%")
+print(
+    f"Akurasi = {classification_result['overall_accuracy']:.4f} "
+    f"({classification_result['correct_predictions']}/{classification_result['total_predictions']})"
+)
+
+print()
+print("Confusion Matrix (Aktual x Prediksi) [Naik(1), Turun(0)]:")
+cm_class = classification_result['confusion_matrix']['matrix']
+print(f"  Aktual Naik  -> Pred Naik : {cm_class[0, 0]}")
+print(f"  Aktual Naik  -> Pred Turun: {cm_class[0, 1]}")
+print(f"  Aktual Turun -> Pred Naik : {cm_class[1, 0]}")
+print(f"  Aktual Turun -> Pred Turun: {cm_class[1, 1]}")
+
+for class_name in ['naik', 'turun']:
+    m = classification_result['metrics'][class_name]
+    print()
+    print(f"Metrik kelas {class_name.capitalize()}:")
+    print(f"  Precision: {m['precision']:.4f}")
+    print(f"  Recall   : {m['recall']:.4f}")
+    print(f"  F1-score : {m['f1_score']:.4f}")
+
+print()
+print("Uji Signifikansi Binomial (vs p=0.5):")
+print(f"  p-value = {classification_result['binomial_significance']['p_value']:.6f}")
+
+print()
+print("="*60)
 print("STEP 11: PERBANDINGAN & HASIL EVALUASI")
 print("="*60)
 
