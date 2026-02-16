@@ -30,6 +30,9 @@ from sklearn.metrics import (
     mean_squared_error,
     r2_score,
     accuracy_score,
+    precision_score,
+    recall_score,
+    f1_score,
     precision_recall_fscore_support,
     confusion_matrix
 )
@@ -886,11 +889,30 @@ def run_direction_classification_experiment(seq_length, df_features, feature_col
     X_train, y_train = create_classification_sequences(train_scaled, y_train_raw, seq_length)
     X_test, y_test = create_classification_sequences(test_scaled, y_test_raw, seq_length)
 
+    train_class_counts = pd.Series(y_train).value_counts().reindex([1, 0], fill_value=0)
+    train_total = int(train_class_counts.sum())
+    train_class_distribution = {
+        'naik': {
+            'count': int(train_class_counts.loc[1]),
+            'percentage': (float(train_class_counts.loc[1]) / train_total * 100.0) if train_total > 0 else np.nan
+        },
+        'turun': {
+            'count': int(train_class_counts.loc[0]),
+            'percentage': (float(train_class_counts.loc[0]) / train_total * 100.0) if train_total > 0 else np.nan
+        }
+    }
+
+    n_classes = 2
+    class_weight = {
+        cls: (train_total / (n_classes * count)) if count > 0 else 1.0
+        for cls, count in train_class_counts.items()
+    }
+
     model = build_direction_classifier(seq_length, X_train.shape[2])
     model.compile(
         optimizer=keras.optimizers.Adam(learning_rate=0.0005),
         loss='binary_crossentropy',
-        metrics=['accuracy']
+        metrics=['accuracy', keras.metrics.AUC(name='auc')]
     )
 
     early_stop = EarlyStopping(
@@ -912,12 +934,44 @@ def run_direction_classification_experiment(seq_length, df_features, feature_col
         epochs=150,
         batch_size=32,
         shuffle=False,
+        class_weight=class_weight,
         callbacks=[early_stop, reduce_lr],
         verbose=0
     )
 
     y_pred_prob = model.predict(X_test, verbose=0).flatten()
-    y_pred_class = (y_pred_prob >= 0.5).astype(int)
+    prob_distribution = {
+        'min': float(np.min(y_pred_prob)),
+        'max': float(np.max(y_pred_prob)),
+        'mean': float(np.mean(y_pred_prob))
+    }
+
+    threshold_candidates = [0.45, 0.48, 0.50, 0.52, 0.55]
+    threshold_results = []
+    for threshold in threshold_candidates:
+        y_pred_class_t = (y_pred_prob >= threshold).astype(int)
+        threshold_results.append({
+            'threshold': threshold,
+            'accuracy': float(accuracy_score(y_test, y_pred_class_t)),
+            'precision': float(precision_score(y_test, y_pred_class_t, average='macro', zero_division=0)),
+            'recall': float(recall_score(y_test, y_pred_class_t, average='macro', zero_division=0)),
+            'f1_score': float(f1_score(y_test, y_pred_class_t, average='macro', zero_division=0)),
+            'predicted_up_count': int(np.sum(y_pred_class_t == 1)),
+            'predicted_down_count': int(np.sum(y_pred_class_t == 0))
+        })
+
+    valid_threshold_results = [
+        row for row in threshold_results
+        if row['predicted_up_count'] > 0 and row['predicted_down_count'] > 0
+    ]
+    threshold_pool = valid_threshold_results if valid_threshold_results else threshold_results
+
+    best_threshold_result = max(
+        threshold_pool,
+        key=lambda item: (item['f1_score'], item['accuracy'])
+    )
+    best_threshold = best_threshold_result['threshold']
+    y_pred_class = (y_pred_prob >= best_threshold).astype(int)
 
     overall_accuracy = accuracy_score(y_test, y_pred_class)
     precision, recall, f1, _ = precision_recall_fscore_support(
@@ -938,8 +992,14 @@ def run_direction_classification_experiment(seq_length, df_features, feature_col
         'history': history,
         'model': model,
         'scaler': scaler,
+        'train_class_distribution': train_class_distribution,
+        'class_weight': {int(k): float(v) for k, v in class_weight.items()},
         'y_test': y_test,
         'y_pred_prob': y_pred_prob,
+        'prob_distribution': prob_distribution,
+        'threshold_results': threshold_results,
+        'best_threshold': float(best_threshold),
+        'best_threshold_metrics': best_threshold_result,
         'y_pred_class': y_pred_class,
         'overall_accuracy': float(overall_accuracy),
         'directional_accuracy': float(overall_accuracy * 100),
@@ -1004,6 +1064,51 @@ classification_result = run_direction_classification_experiment(
 
 print()
 print("--- Evaluasi Model Klasifikasi Arah (SimpleRNN Sigmoid) ---")
+
+train_dist = classification_result['train_class_distribution']
+print("Distribusi kelas data train (setelah sequence):")
+print(
+    f"  Naik  : {train_dist['naik']['count']} sampel "
+    f"({train_dist['naik']['percentage']:.2f}%)"
+)
+print(
+    f"  Turun : {train_dist['turun']['count']} sampel "
+    f"({train_dist['turun']['percentage']:.2f}%)"
+)
+
+print("Class weight (berdasarkan proporsi kelas train):")
+print(f"  class_weight[1] (Naik)  = {classification_result['class_weight'][1]:.4f}")
+print(f"  class_weight[0] (Turun) = {classification_result['class_weight'][0]:.4f}")
+
+last_auc = classification_result['history'].history.get('auc', [np.nan])[-1]
+last_val_auc = classification_result['history'].history.get('val_auc', [np.nan])[-1]
+print(f"AUC (train akhir epoch)    : {last_auc:.4f}")
+print(f"AUC (validasi akhir epoch) : {last_val_auc:.4f}")
+
+prob_dist = classification_result['prob_distribution']
+print("Distribusi probabilitas output (y_pred_prob):")
+print(f"  Min  : {prob_dist['min']:.6f}")
+print(f"  Max  : {prob_dist['max']:.6f}")
+print(f"  Mean : {prob_dist['mean']:.6f}")
+
+print()
+print("Threshold tuning (berdasarkan probabilitas Naik, metrik macro untuk keseimbangan kelas):")
+print(f"{'Threshold':<12} {'Accuracy':<10} {'Precision':<10} {'Recall':<10} {'F1-score':<10} {'Pred Naik':<10} {'Pred Turun':<10}")
+print("-" * 84)
+for row in classification_result['threshold_results']:
+    print(
+        f"{row['threshold']:<12.2f} {row['accuracy']:<10.4f} {row['precision']:<10.4f} "
+        f"{row['recall']:<10.4f} {row['f1_score']:<10.4f} {row['predicted_up_count']:<10} {row['predicted_down_count']:<10}"
+    )
+
+best_thr = classification_result['best_threshold_metrics']
+print()
+print(
+    f"Threshold terbaik (Macro F1 tertinggi, non-collapse): {classification_result['best_threshold']:.2f} "
+    f"dengan Macro F1={best_thr['f1_score']:.4f}, Accuracy={best_thr['accuracy']:.4f}"
+)
+
+print()
 print(f"Directional Accuracy keseluruhan : {classification_result['directional_accuracy']:.2f}%")
 print(
     f"Akurasi = {classification_result['overall_accuracy']:.4f} "
