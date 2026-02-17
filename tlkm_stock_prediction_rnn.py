@@ -204,7 +204,7 @@ def create_features(df):
     if 'Close' not in df.columns:
         raise ValueError("Kolom Close tidak ditemukan")
     
-    # Moving Averages
+    # Moving Averages (intermediary)
     df['SMA_10'] = df['Close'].rolling(window=10, min_periods=10).mean()
     df['EMA_10'] = df['Close'].ewm(span=10, adjust=False).mean()
     
@@ -231,7 +231,11 @@ def create_features(df):
     df['ROLL_STD_RETURN_5D'] = df['RETURN_1D'].rolling(
         window=5, min_periods=5).std()
     
-    # Hapus baris dengan NaN
+    # Moving Average features (MA_5 & MA_10)
+    df['MA_5']  = df['Close'].rolling(window=5,  min_periods=5).mean()
+    df['MA_10'] = df['Close'].rolling(window=10, min_periods=10).mean()
+    
+    # Hapus baris dengan NaN (akibat rolling & shift)
     df = df.dropna()
     
     return df
@@ -243,11 +247,12 @@ print("="*70)
 
 df_feat = create_features(df_clean)
 
-# Fitur yang akan digunakan
+# Fitur yang akan digunakan (11 fitur)
 FEATURE_COLS = [
     'Open', 'High', 'Low', 'Close', 'Volume',
     'RETURN_LAG_1', 'RETURN_LAG_2', 
-    'RSI_SLOPE', 'ROLL_STD_RETURN_5D'
+    'RSI_SLOPE', 'ROLL_STD_RETURN_5D',
+    'MA_5', 'MA_10'
 ]
 TARGET_COL = 'Close'
 
