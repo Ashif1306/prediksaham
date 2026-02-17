@@ -59,7 +59,8 @@ WINDOW_SIZE = 10
 FEATURE_COLS = [
     'Open', 'High', 'Low', 'Close', 'Volume',
     'RETURN_LAG_1', 'RETURN_LAG_2', 
-    'RSI_SLOPE', 'ROLL_STD_RETURN_5D'
+    'RSI_SLOPE', 'ROLL_STD_RETURN_5D',
+    'MA_5', 'MA_10'
 ]
 TARGET_COL = 'Close'
 
@@ -112,6 +113,10 @@ def create_features(df):
     df['RSI_SLOPE'] = df['RSI_14'].diff()
     df['ROLL_STD_RETURN_5D'] = df['RETURN_1D'].rolling(
         window=5, min_periods=5).std()
+
+    # Moving Average features (MA_5 & MA_10)
+    df['MA_5'] = df['Close'].rolling(window=5, min_periods=5).mean()
+    df['MA_10'] = df['Close'].rolling(window=10, min_periods=10).mean()
     
     # Hapus baris dengan NaN
     df = df.dropna()
@@ -326,6 +331,13 @@ def predict_next_trading_day(model, scaler, df_recent, verbose=True):
     # -------------------------------------------------------------------------
     # Ambil 10 baris terakhir dengan semua fitur yang dibutuhkan
     last_window = df_recent[FEATURE_COLS].iloc[-WINDOW_SIZE:].values
+
+    expected_window_shape = (WINDOW_SIZE, len(FEATURE_COLS))
+    if last_window.shape != expected_window_shape:
+        raise ValueError(
+            f"Shape input sebelum scaling tidak sesuai. "
+            f"Expected {expected_window_shape}, got {last_window.shape}"
+        )
     
     if verbose:
         print(f"\n📊 Data Input:")
@@ -339,6 +351,17 @@ def predict_next_trading_day(model, scaler, df_recent, verbose=True):
     # -------------------------------------------------------------------------
     # PENTING: Gunakan scaler yang sudah di-fit pada training
     # JANGAN fit ulang karena akan menyebabkan data leakage
+    scaler_n_features = getattr(scaler, 'n_features_in_', None)
+    if scaler_n_features is None:
+        scaler_n_features = len(getattr(scaler, 'scale_', []))
+
+    if scaler_n_features != len(FEATURE_COLS):
+        raise ValueError(
+            f"Jumlah fitur tidak cocok dengan scaler training. "
+            f"Scaler expects {scaler_n_features}, "
+            f"namun pipeline prediksi memberikan {len(FEATURE_COLS)} fitur."
+        )
+
     last_window_scaled = scaler.transform(last_window)
     
     if verbose:
@@ -353,6 +376,13 @@ def predict_next_trading_day(model, scaler, df_recent, verbose=True):
     # RNN membutuhkan input 3D: (batch_size, timesteps, features)
     # Untuk single prediction: batch_size = 1
     X_pred = last_window_scaled.reshape(1, WINDOW_SIZE, len(FEATURE_COLS))
+
+    expected_rnn_shape = (1, WINDOW_SIZE, len(FEATURE_COLS))
+    if X_pred.shape != expected_rnn_shape:
+        raise ValueError(
+            f"Shape input RNN tidak sesuai. "
+            f"Expected {expected_rnn_shape}, got {X_pred.shape}"
+        )
     
     if verbose:
         print(f"  Reshape untuk RNN: {X_pred.shape}")
