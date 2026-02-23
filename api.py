@@ -23,7 +23,6 @@ import numpy as np
 import pandas as pd
 from datetime import datetime
 from contextlib import asynccontextmanager
-import yfinance as yf
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
@@ -33,6 +32,7 @@ from pydantic import BaseModel, Field
 
 from tensorflow import keras
 import joblib
+import yfinance as yf
 
 from calendar_utils import get_next_trading_day
 
@@ -46,6 +46,7 @@ DATA_PATH     = "data/data_tlkm_harga_saham.csv"
 DB_PATH       = "predictions.db"
 TEMPLATES_DIR = "templates"
 
+TICKER       = "TLKM.JK"
 WINDOW_SIZE  = 10
 TARGET_COL   = "Close"
 FEATURE_COLS = [
@@ -161,84 +162,100 @@ def create_features(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # =============================================================================
-# LOAD DATA
+# UPDATE DATA — ambil data terbaru dari Yahoo Finance (NO RETRAINING)
 # =============================================================================
 def update_latest_data() -> None:
     """
-    Perbarui dataset harga TLKM terbaru dari Yahoo Finance.
-    Tidak melakukan retraining model/scaler, hanya update data mentah.
+    Mengambil data harga terbaru TLKM.JK dari Yahoo Finance dan
+    menggabungkannya ke file CSV lokal.
+
+    Aturan ketat:
+      - TIDAK memanggil model.fit() / scaler.fit() / model.save()
+      - Hanya memperbarui raw OHLCV sebelum feature engineering
+      - Aman dipanggil berulang kali (idempotent)
     """
+    print("[update_latest_data] Memulai pembaruan data...")
+
+    # ── 1. Pastikan file CSV lama ada ────────────────────────────────────
+    if not os.path.exists(DATA_PATH):
+        print(f"[update_latest_data] SKIP — file tidak ditemukan: {DATA_PATH}")
+        return
+
     try:
-        if not os.path.exists(DATA_PATH):
-            raise FileNotFoundError(f"File tidak ditemukan: {DATA_PATH}")
-
+        # ── 2. Baca dataset lama ─────────────────────────────────────────
         df_old = pd.read_csv(DATA_PATH, index_col=0, parse_dates=[0])
-
-        if not isinstance(df_old.index, pd.DatetimeIndex):
-            df_old.index = pd.to_datetime(df_old.index, errors="coerce")
-
+        df_old.index = pd.to_datetime(df_old.index, errors="coerce")
         df_old = df_old[~df_old.index.isna()].copy()
-        df_old.index = pd.DatetimeIndex(df_old.index)
+        df_old.index = pd.DatetimeIndex(df_old.index.normalize())   # strip time
         df_old = df_old.sort_index()
 
-        if df_old.empty:
-            print("[update_latest_data] Dataset lama kosong. Update dibatalkan.")
-            return
-
         last_date = df_old.index[-1]
-        start_date = last_date.strftime("%Y-%m-%d")
+        print(f"[update_latest_data] Tanggal terakhir dataset: {last_date.date()}")
 
-        print(f"[update_latest_data] Ambil data terbaru TLKM.JK dari {start_date}...")
+        # ── 3. Tentukan rentang download ──────────────────────────────────
+        # Mulai dari last_date (inklusif) agar overlap 1 hari
+        # yfinance: start inklusif, end eksklusif → tambah 2 hari untuk hari ini
+        fetch_start = last_date.strftime("%Y-%m-%d")
+        fetch_end   = (pd.Timestamp.today() + pd.Timedelta(days=2)).strftime("%Y-%m-%d")
+
+        print(f"[update_latest_data] Mengambil data {fetch_start} → {fetch_end} dari Yahoo Finance...")
+
+        # ── 4. Download dari Yahoo Finance ───────────────────────────────
         df_new = yf.download(
-            "TLKM.JK",
-            start=start_date,
-            progress=False,
-            auto_adjust=False,
-            interval="1d",
+            tickers    = TICKER,
+            start      = fetch_start,
+            end        = fetch_end,
+            auto_adjust= True,          # harga sudah adjusted
+            progress   = False,
         )
 
-        if df_new.empty:
-            print("[update_latest_data] Tidak ada data baru dari Yahoo Finance.")
+        if df_new is None or df_new.empty:
+            print("[update_latest_data] Tidak ada data baru dari Yahoo Finance — dataset tetap.")
             return
 
+        # ── 5. Bersihkan kolom MultiIndex dari yfinance ───────────────────
         if isinstance(df_new.columns, pd.MultiIndex):
             df_new.columns = df_new.columns.get_level_values(0)
 
-        available_cols = [col for col in ["Open", "High", "Low", "Close", "Volume"] if col in df_new.columns]
-        if not available_cols:
-            print("[update_latest_data] Data baru tidak memiliki kolom OHLCV yang valid.")
+        # Pastikan kolom yang dibutuhkan ada
+        needed = ["Open", "High", "Low", "Close", "Volume"]
+        missing = [c for c in needed if c not in df_new.columns]
+        if missing:
+            print(f"[update_latest_data] Kolom hilang dari Yahoo Finance: {missing} — SKIP")
             return
 
-        df_new = df_new[available_cols].copy()
-        df_new.index = pd.to_datetime(df_new.index, errors="coerce")
-        df_new = df_new[~df_new.index.isna()].copy()
-        df_new.index = pd.DatetimeIndex(df_new.index)
+        df_new = df_new[needed].copy()
+        df_new.index = pd.DatetimeIndex(df_new.index.normalize())   # strip time
         df_new = df_new.sort_index()
 
-        if len(df_new) <= 1 and df_new.index[-1] <= last_date:
-            print("[update_latest_data] Tidak ada data baru setelah tanggal terakhir dataset lama.")
+        # ── 6. Gabung lama + baru, hapus duplikat ────────────────────────
+        # ~keep="last"~ → jika tanggal sama, data dari yfinance (terbaru) menang
+        df_combined = pd.concat([df_old[needed], df_new])
+        df_combined = df_combined[~df_combined.index.duplicated(keep="last")]
+        df_combined = df_combined.sort_index()
+
+        # ── 7. Hitung jumlah baris baru ───────────────────────────────────
+        n_new = len(df_combined) - len(df_old)
+        if n_new <= 0:
+            print("[update_latest_data] Tidak ada baris baru — dataset sudah terkini.")
             return
 
-        combined = pd.concat([df_old, df_new], axis=0)
-        combined.index = pd.to_datetime(combined.index, errors="coerce")
-        combined = combined[~combined.index.isna()].copy()
-        combined.index = pd.DatetimeIndex(combined.index)
-        combined = combined[~combined.index.duplicated(keep="last")]
-        combined = combined.sort_index()
+        print(f"[update_latest_data] {n_new} baris baru ditambahkan. Total: {len(df_combined)} baris.")
 
-        added_rows = len(combined) - len(df_old)
-        combined.to_csv(DATA_PATH)
+        # ── 8. Simpan ke CSV (timpa file lama) ────────────────────────────
+        df_combined.to_csv(DATA_PATH)
+        print(f"[update_latest_data] Dataset disimpan ke: {DATA_PATH}")
+        print(f"[update_latest_data] Rentang data: {df_combined.index[0].date()} → {df_combined.index[-1].date()}")
 
-        if added_rows > 0:
-            print(f"[update_latest_data] Update sukses. Baris baru ditambahkan: {added_rows}")
-        else:
-            print("[update_latest_data] Tidak ada baris baru untuk ditambahkan.")
     except Exception as exc:
-        # Jangan sampai endpoint /predict crash hanya karena update data gagal
-        print(f"[update_latest_data] ERROR: {exc}")
+        # Tangani semua error agar API tidak crash
+        print(f"[update_latest_data] ERROR (diabaikan): {exc}")
 
 
-def load_and_prepare_data() -> pd.DataFrame:
+# =============================================================================
+# LOAD DATA
+# =============================================================================
+def load_feature_data() -> pd.DataFrame:
     if not os.path.exists(DATA_PATH):
         raise FileNotFoundError(f"File tidak ditemukan: {DATA_PATH}")
 
@@ -265,7 +282,7 @@ def load_and_prepare_data() -> pd.DataFrame:
 # =============================================================================
 # INFERENCE (NO FIT, NO SAVE)
 # =============================================================================
-def predict_next_trading_day(model, scaler, df_feat: pd.DataFrame) -> dict:
+def run_inference(model, scaler, df_feat: pd.DataFrame) -> dict:
     last_window        = df_feat[FEATURE_COLS].iloc[-WINDOW_SIZE:].values
     last_window_scaled = scaler.transform(last_window)          # NO FIT
     X_pred             = last_window_scaled.reshape(1, WINDOW_SIZE, len(FEATURE_COLS))
@@ -400,46 +417,68 @@ async def index(request: Request):
 def predict_next_day():
     """
     Prediksi harga saham TLKM untuk next trading day.
-    Hasil disimpan ke SQLite.
-    """
-    print("[GET /predict] Request diterima — memulai inferensi...")
 
+    Pipeline lengkap:
+      1. update_latest_data()   — ambil data terbaru dari Yahoo Finance
+      2. load_feature_data()    — baca CSV + feature engineering
+      3. run_inference()        — prediksi dengan model (NO FIT / NO SAVE)
+      4. save_prediction()      — simpan hasil ke SQLite
+
+    ⚠ Inference-only. Tidak ada model.fit(), scaler.fit(), model.save().
+    """
+    print("[GET /predict] ══════════════════════════════════════")
+    print("[GET /predict] Request diterima — memulai pipeline...")
+
+    # ── Cek model & scaler sudah ter-load ────────────────────────────────
     if app_state["model"] is None or app_state["scaler"] is None:
-        print("[GET /predict] ERROR: model belum loaded")
+        print("[GET /predict] ERROR: model/scaler belum loaded")
         raise HTTPException(status_code=503, detail={
             "error": "Model belum ter-load",
             "detail": "Restart server dan tunggu hingga startup selesai.",
         })
 
+    # ── STEP 1: Update data terbaru dari Yahoo Finance ───────────────────
+    # Error ditangani di dalam fungsi — tidak akan crash API
+    print("[GET /predict] STEP 1 — Update data dari Yahoo Finance...")
     update_latest_data()
 
+    # ── STEP 2: Load & feature engineering ──────────────────────────────
+    print("[GET /predict] STEP 2 — Load data & feature engineering...")
     try:
-        df_feat = load_and_prepare_data()
-        print(f"[GET /predict] Data loaded: {len(df_feat)} baris")
+        df_feat = load_feature_data()
+        print(f"[GET /predict] Data siap: {len(df_feat)} baris | "
+              f"rentang: {df_feat.index[0].date()} → {df_feat.index[-1].date()}")
     except Exception as exc:
         print(f"[GET /predict] ERROR load data: {exc}")
         raise HTTPException(status_code=500, detail={
-            "error": "Gagal load data", "detail": str(exc),
+            "error": "Gagal memuat data", "detail": str(exc),
         }) from exc
 
+    # ── STEP 3: Inference (NO FIT, NO SAVE) ──────────────────────────────
+    print("[GET /predict] STEP 3 — Menjalankan inferensi model...")
     try:
-        result = predict_next_trading_day(app_state["model"], app_state["scaler"], df_feat)
-        print(f"[GET /predict] Inferensi selesai: {result['predicted_price']}")
+        result = run_inference(app_state["model"], app_state["scaler"], df_feat)
+        print(f"[GET /predict] Prediksi: Rp {result['predicted_price']:,.2f} "
+              f"| {result['prediction_date']} ({result['trend'].upper()})")
     except Exception as exc:
         print(f"[GET /predict] ERROR inferensi: {exc}")
         raise HTTPException(status_code=500, detail={
             "error": "Inferensi gagal", "detail": str(exc),
         }) from exc
 
+    # ── STEP 4: Simpan ke SQLite ──────────────────────────────────────────
+    print("[GET /predict] STEP 4 — Menyimpan hasil ke database...")
     try:
         row_id = save_prediction(result)
-        print(f"[GET /predict] Tersimpan ke DB dengan ID #{row_id}")
+        print(f"[GET /predict] Tersimpan dengan ID #{row_id}")
     except Exception as exc:
         print(f"[GET /predict] ERROR simpan DB: {exc}")
         raise HTTPException(status_code=500, detail={
-            "error": "Gagal simpan ke DB", "detail": str(exc),
+            "error": "Gagal simpan ke database", "detail": str(exc),
         }) from exc
 
+    print(f"[GET /predict] ✓ Selesai — ID #{row_id}")
+    print("[GET /predict] ══════════════════════════════════════")
     return PredictionResponse(**result, saved_id=row_id)
 
 
