@@ -21,6 +21,7 @@ warnings.filterwarnings("ignore")
 
 import numpy as np
 import pandas as pd
+import yfinance as yf
 from datetime import datetime
 from contextlib import asynccontextmanager
 
@@ -189,6 +190,73 @@ def load_feature_data() -> pd.DataFrame:
     return df_feat
 
 
+def update_latest_data() -> None:
+    """
+    Update dataset TLKM harian dari Yahoo Finance tanpa retraining.
+    """
+    try:
+        if not os.path.exists(DATA_PATH):
+            print(f"[update_latest_data] Dataset tidak ditemukan: {DATA_PATH}")
+            return
+
+        df_old = pd.read_csv(DATA_PATH, index_col=0, parse_dates=[0])
+
+        if not isinstance(df_old.index, pd.DatetimeIndex):
+            df_old.index = pd.to_datetime(df_old.index, errors="coerce")
+
+        df_old = df_old[~df_old.index.isna()].copy()
+        df_old.index = pd.DatetimeIndex(df_old.index)
+        df_old.index = df_old.index.tz_localize(None)
+        df_old = df_old.sort_index()
+
+        if df_old.empty:
+            print("[update_latest_data] Dataset lama kosong, update dibatalkan.")
+            return
+
+        last_date = df_old.index[-1]
+        start_date = last_date.strftime("%Y-%m-%d")
+
+        df_new = yf.download(
+            "TLKM.JK",
+            start=start_date,
+            progress=False,
+            auto_adjust=False,
+        )
+
+        if df_new is None or df_new.empty:
+            print(f"[update_latest_data] Tidak ada data baru dari {start_date}.")
+            return
+
+        if isinstance(df_new.columns, pd.MultiIndex):
+            df_new.columns = df_new.columns.get_level_values(0)
+
+        required_cols = ["Open", "High", "Low", "Close", "Volume"]
+        missing_cols = [col for col in required_cols if col not in df_new.columns]
+        if missing_cols:
+            raise ValueError(f"Kolom wajib tidak ditemukan dari Yahoo Finance: {missing_cols}")
+
+        df_new = df_new[required_cols].copy()
+        df_new.index = pd.to_datetime(df_new.index, errors="coerce")
+        df_new = df_new[~df_new.index.isna()].copy()
+        df_new.index = pd.DatetimeIndex(df_new.index).tz_localize(None)
+
+        df_combined = pd.concat([df_old, df_new])
+        df_combined = df_combined[~df_combined.index.duplicated(keep="last")]
+        df_combined = df_combined.sort_index()
+
+        if len(df_combined) == len(df_old):
+            print("[update_latest_data] Tidak ada baris baru untuk disimpan.")
+            return
+
+        df_combined.to_csv(DATA_PATH)
+        print(
+            f"[update_latest_data] Dataset diperbarui: "
+            f"{len(df_old)} -> {len(df_combined)} baris (last: {df_combined.index[-1].date()})."
+        )
+    except Exception as exc:
+        print(f"[update_latest_data] ERROR: {exc}")
+
+
 # =============================================================================
 # INFERENCE (NO FIT, NO SAVE)
 # =============================================================================
@@ -332,6 +400,11 @@ def predict_next_day():
             "error": "Model belum ter-load",
             "detail": "Restart server dan tunggu hingga startup selesai.",
         })
+
+    try:
+        update_latest_data()
+    except Exception as exc:
+        print(f"[GET /predict] WARNING update data: {exc}")
 
     try:
         df_feat = load_and_prepare_data()
