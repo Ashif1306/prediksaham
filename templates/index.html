@@ -45,7 +45,7 @@
     @keyframes float1 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(40px,30px)} }
     @keyframes float2 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(-30px,40px)} }
 
-    .wrapper { position:relative;z-index:1;max-width:920px;margin:0 auto;padding:60px 24px 80px; }
+    .wrapper { position:relative;z-index:1;max-width:960px;margin:0 auto;padding:60px 24px 80px; }
 
     .badge {
       display:inline-block; font-family:'DM Mono',monospace;
@@ -75,72 +75,76 @@
       margin:36px 0; animation:fadeDown .7s .3s ease both;
     }
 
-    /* ACTION CARDS */
-    .actions { display:grid;grid-template-columns:1fr 1fr;gap:20px;animation:fadeDown .7s .4s ease both; }
-    @media(max-width:560px){ .actions{grid-template-columns:1fr;} }
+    /* ── ACTION CARDS ────────────────────────────────────── */
+    .actions { display:grid;grid-template-columns:repeat(3,1fr);gap:16px;animation:fadeDown .7s .4s ease both; }
+    @media(max-width:680px){ .actions{grid-template-columns:1fr;} }
+    @media(min-width:681px) and (max-width:860px){ .actions{grid-template-columns:1fr 1fr;} }
 
     .action-card {
       position:relative;background:var(--card);border:1px solid var(--border);
-      border-radius:16px;padding:30px 26px;overflow:hidden;
+      border-radius:16px;padding:26px 22px;overflow:hidden;
       transition:transform .25s,border-color .25s,box-shadow .25s;
     }
     .action-card::before {
-      content:'';
-      position:absolute;
-      inset:0;
-      opacity:0;
-      transition:opacity .3s;
-      border-radius:inherit;
-
-      pointer-events: none;   /* ← TAMBAHKAN INI */
+      content:'';position:absolute;inset:0;opacity:0;transition:opacity .3s;
+      border-radius:inherit;pointer-events:none;
     }
     .action-card.primary::before   { background:radial-gradient(circle at 70% 0%,rgba(0,200,255,.14),transparent 70%); }
     .action-card.secondary::before { background:radial-gradient(circle at 70% 0%,rgba(10,245,176,.12),transparent 70%); }
+    .action-card.tertiary::before  { background:radial-gradient(circle at 70% 0%,rgba(245,197,24,.10),transparent 70%); }
     .action-card:hover { transform:translateY(-4px);box-shadow:var(--glow); }
     .action-card:hover::before { opacity:1; }
     .action-card.primary:hover   { border-color:rgba(0,200,255,.5); }
     .action-card.secondary:hover { border-color:rgba(10,245,176,.5); }
+    .action-card.tertiary:hover  { border-color:rgba(245,197,24,.4); }
 
-    .card-icon { width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:16px; }
+    .card-icon { width:40px;height:40px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:19px;margin-bottom:14px; }
     .primary   .card-icon { background:rgba(0,200,255,.12); }
     .secondary .card-icon { background:rgba(10,245,176,.12); }
-    .card-label { font-size:10px;font-family:'DM Mono',monospace;letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px; }
+    .tertiary  .card-icon { background:rgba(245,197,24,.12); }
+    .card-label { font-size:10px;font-family:'DM Mono',monospace;letter-spacing:.1em;text-transform:uppercase;margin-bottom:5px; }
     .primary   .card-label { color:var(--accent); }
     .secondary .card-label { color:var(--green); }
-    .card-title { font-size:17px;font-weight:600;color:#fff;margin-bottom:8px; }
-    .card-desc  { font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:22px; }
+    .tertiary  .card-label { color:var(--gold); }
+    .card-title { font-size:16px;font-weight:600;color:#fff;margin-bottom:7px; }
+    .card-desc  { font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:20px;min-height:48px; }
 
-    /* BUTTONS */
+    /* ── BUTTONS ─────────────────────────────────────────── */
     .btn {
       display:inline-flex;align-items:center;gap:8px;
-      font-size:13px;font-weight:600;padding:10px 20px;
+      font-size:12px;font-weight:600;padding:9px 18px;
       border-radius:8px;border:none;cursor:pointer;
       font-family:'DM Sans',sans-serif;transition:all .2s ease;
     }
     .btn:disabled { opacity:.6;cursor:not-allowed;transform:none !important; }
-    .btn-primary  { background:var(--accent);color:#000; }
+    .btn-primary   { background:var(--accent);color:#000; }
     .btn-primary:hover:not(:disabled)  { background:#33d5ff;transform:scale(1.03); }
     .btn-secondary { background:transparent;color:var(--green);border:1px solid rgba(10,245,176,.4); }
     .btn-secondary:hover:not(:disabled){ background:rgba(10,245,176,.08);transform:scale(1.03); }
+    .btn-tertiary  { background:transparent;color:var(--gold);border:1px solid rgba(245,197,24,.4); }
+    .btn-tertiary:hover:not(:disabled) { background:rgba(245,197,24,.08);transform:scale(1.03); }
+    .btn-danger    { background:transparent;color:var(--red);border:1px solid rgba(255,77,109,.35);
+                     padding:5px 10px;font-size:11px;border-radius:6px; }
+    .btn-danger:hover { background:rgba(255,77,109,.1);border-color:rgba(255,77,109,.6); }
 
-    /* SPINNER */
-    .spinner { display:none;width:16px;height:16px;border-radius:50%;animation:spin .6s linear infinite;flex-shrink:0; }
+    /* ── SPINNER ─────────────────────────────────────────── */
+    .spinner { display:none;width:14px;height:14px;border-radius:50%;animation:spin .6s linear infinite;flex-shrink:0; }
     .btn-primary  .spinner { border:2px solid rgba(0,0,0,.2);border-top-color:#000; }
-    .btn-secondary .spinner { border:2px solid rgba(10,245,176,.2);border-top-color:var(--green); }
+    .btn-secondary .spinner,.btn-tertiary .spinner { border:2px solid rgba(255,255,255,.15);border-top-color:currentColor; }
     @keyframes spin { to{transform:rotate(360deg)} }
 
-    /* #result wrapper */
-    #result { margin-top:36px; }
+    /* ── OUTPUT AREA ─────────────────────────────────────── */
+    #result { margin-top:32px; }
 
-    /* RESULT CARD */
+    /* ── RESULT CARD ─────────────────────────────────────── */
     .result-card {
       background:var(--card);border:1px solid var(--border);
-      border-radius:16px;overflow:hidden;
-      animation:fadeDown .45s ease both;
+      border-radius:16px;overflow:hidden;animation:fadeDown .45s ease both;
+      margin-bottom:20px;
     }
     .result-header {
       display:flex;align-items:center;justify-content:space-between;
-      padding:16px 22px;border-bottom:1px solid var(--border);
+      padding:14px 20px;border-bottom:1px solid var(--border);
       background:rgba(0,200,255,.04);
     }
     .rh-left {
@@ -151,51 +155,92 @@
     .dot-live { width:8px;height:8px;background:var(--green);border-radius:50%;animation:pulse 1.5s infinite; }
     @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.3;transform:scale(1.5)} }
     .result-ts { font-size:11px;color:var(--muted);font-family:'DM Mono',monospace; }
+    .upsert-badge {
+      font-size:10px;font-family:'DM Mono',monospace;padding:3px 9px;border-radius:100px;
+      letter-spacing:.06em;text-transform:uppercase;
+    }
+    .badge-new    { background:rgba(10,245,176,.12);color:var(--green);border:1px solid rgba(10,245,176,.3); }
+    .badge-update { background:rgba(245,197,24,.10);color:var(--gold); border:1px solid rgba(245,197,24,.3); }
 
-    .result-grid { display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); }
+    .result-grid { display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); }
     .result-item {
-      padding:22px 20px;
-      border-right:1px solid var(--border);
-      border-bottom:1px solid var(--border);
+      padding:20px 18px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);
     }
     .result-item:last-child { border-right:none; }
-    .ri-label { font-size:10px;font-family:'DM Mono',monospace;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px; }
-    .ri-value { font-size:20px;font-weight:700;color:#fff;font-family:'DM Serif Display',serif; }
+    .ri-label { font-size:10px;font-family:'DM Mono',monospace;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:7px; }
+    .ri-value { font-size:19px;font-weight:700;color:#fff;font-family:'DM Serif Display',serif; }
     .ri-value.up   { color:var(--green); }
     .ri-value.down { color:var(--red);   }
     .ri-value.flat { color:var(--gold);  }
     .ri-sub { font-size:12px;color:var(--muted);margin-top:4px; }
 
-    /* TREND BADGE */
+    /* ── TREND BADGE ─────────────────────────────────────── */
     .trend-badge { display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:100px;font-size:11px;font-weight:600;letter-spacing:.05em; }
     .bullish { background:rgba(10,245,176,.12);color:var(--green);border:1px solid rgba(10,245,176,.3); }
     .bearish { background:rgba(255,77,109,.12); color:var(--red);  border:1px solid rgba(255,77,109,.3); }
     .flat    { background:rgba(245,197,24,.12); color:var(--gold); border:1px solid rgba(245,197,24,.3); }
 
-    /* HISTORY */
-    .history-wrap { background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;overflow-x:auto;animation:fadeDown .45s ease both; }
-    .history-title {
-      display:flex;align-items:center;gap:10px;padding:16px 22px;
-      border-bottom:1px solid var(--border);background:rgba(10,245,176,.03);
-      font-family:'DM Mono',monospace;font-size:11px;
-      color:var(--green);letter-spacing:.1em;text-transform:uppercase;
+    /* ── RECENT PRICES TABLE ─────────────────────────────── */
+    .prices-wrap {
+      background:var(--card);border:1px solid var(--border);border-radius:16px;
+      overflow:hidden;animation:fadeDown .45s ease both;margin-bottom:20px;
+    }
+    .section-header {
+      display:flex;align-items:center;justify-content:space-between;
+      padding:14px 20px;border-bottom:1px solid var(--border);
+    }
+    .section-title {
+      display:flex;align-items:center;gap:10px;
+      font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+    }
+    .prices-title { color:var(--gold); }
+    .history-title-color { color:var(--green); }
+    .section-count { color:var(--muted);font-size:10px;font-family:'DM Mono',monospace; }
+
+    /* ── HISTORY TABLE ───────────────────────────────────── */
+    .history-wrap {
+      background:var(--card);border:1px solid var(--border);border-radius:16px;
+      overflow:hidden;overflow-x:auto;animation:fadeDown .45s ease both;
     }
     table { width:100%;border-collapse:collapse;font-size:13px; }
     thead { background:rgba(0,200,255,.03); }
-    th { padding:12px 16px;text-align:left;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border);white-space:nowrap; }
-    td { padding:13px 16px;border-bottom:1px solid rgba(26,42,68,.5);white-space:nowrap; }
+    th { padding:11px 14px;text-align:left;font-family:'DM Mono',monospace;font-size:10px;
+         letter-spacing:.1em;text-transform:uppercase;color:var(--muted);
+         border-bottom:1px solid var(--border);white-space:nowrap; }
+    td { padding:12px 14px;border-bottom:1px solid rgba(26,42,68,.5);white-space:nowrap; }
     tr:last-child td { border-bottom:none; }
     tbody tr { transition:background .15s; }
     tbody tr:hover { background:rgba(0,200,255,.03); }
-    .empty-state { padding:48px;text-align:center;color:var(--muted);font-size:14px; }
+    .empty-state { padding:40px;text-align:center;color:var(--muted);font-size:14px; }
 
-    /* ERROR & SKELETON */
-    .error-box { background:rgba(255,77,109,.07);border:1px solid rgba(255,77,109,.3);border-radius:12px;padding:16px 20px;color:var(--red);font-size:13px;animation:fadeDown .4s ease both; }
-    .skeleton-box { background:var(--card);border:1px solid var(--border);border-radius:16px;padding:40px;text-align:center;color:var(--muted);font-size:14px;animation:fadeDown .4s ease both; }
-    .sk-spin { width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 14px; }
+    /* ── ERROR / SKELETON ────────────────────────────────── */
+    .error-box { background:rgba(255,77,109,.07);border:1px solid rgba(255,77,109,.3);
+                 border-radius:12px;padding:14px 18px;color:var(--red);font-size:13px;
+                 animation:fadeDown .4s ease both; }
+    .skeleton-box { background:var(--card);border:1px solid var(--border);border-radius:16px;
+                    padding:36px;text-align:center;color:var(--muted);font-size:14px;
+                    animation:fadeDown .4s ease both; }
+    .sk-spin { width:26px;height:26px;border:3px solid var(--border);border-top-color:var(--accent);
+               border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 12px; }
 
-    /* FOOTER */
-    .footer { margin-top:70px;padding-top:28px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px; }
+    /* ── TOAST NOTIFICATION ──────────────────────────────── */
+    #toast {
+      position:fixed;bottom:32px;right:32px;z-index:999;
+      background:var(--card);border:1px solid var(--border);border-radius:12px;
+      padding:12px 20px;font-size:13px;color:var(--text);
+      box-shadow:0 8px 32px rgba(0,0,0,.4);
+      transform:translateY(80px);opacity:0;
+      transition:all .3s cubic-bezier(.34,1.56,.64,1);
+      pointer-events:none;max-width:320px;
+    }
+    #toast.show { transform:translateY(0);opacity:1; }
+    #toast.toast-ok  { border-color:rgba(10,245,176,.4);color:var(--green); }
+    #toast.toast-err { border-color:rgba(255,77,109,.4);color:var(--red);   }
+
+    /* ── FOOTER ──────────────────────────────────────────── */
+    .footer { margin-top:60px;padding-top:24px;border-top:1px solid var(--border);
+              display:flex;align-items:center;justify-content:space-between;
+              flex-wrap:wrap;gap:12px; }
     .footer-l { font-size:12px;color:var(--muted);font-family:'DM Mono',monospace; }
     .footer-r { display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted); }
 
@@ -206,6 +251,7 @@
 
 <div class="blob blob-1"></div>
 <div class="blob blob-2"></div>
+<div id="toast"></div>
 
 <div class="wrapper">
 
@@ -226,16 +272,17 @@
 
   <div class="divider"></div>
 
-  <!-- ACTION CARDS -->
+  <!-- ── ACTION CARDS (3 kolom) ──────────────────────────────────── -->
   <div class="actions">
 
+    <!-- Card 1: Prediksi -->
     <div class="action-card primary">
       <div class="card-icon">📈</div>
       <div class="card-label">Inference Engine</div>
       <div class="card-title">Jalankan Prediksi</div>
       <div class="card-desc">
-        Gunakan model SimpleRNN untuk memprediksi harga penutupan TLKM
-        pada hari perdagangan berikutnya secara real-time.
+        Prediksi harga penutupan TLKM untuk hari perdagangan berikutnya.
+        Satu hari = satu record di database.
       </div>
       <button class="btn btn-primary" id="btn-predict" onclick="runPrediction()">
         <span id="btn-predict-text">Klik untuk Melihat Hasil Prediksi</span>
@@ -243,13 +290,14 @@
       </button>
     </div>
 
+    <!-- Card 2: Riwayat -->
     <div class="action-card secondary">
       <div class="card-icon">🗂️</div>
       <div class="card-label">SQLite Database</div>
       <div class="card-title">Lihat Riwayat Prediksi</div>
       <div class="card-desc">
-        Tampilkan seluruh riwayat prediksi yang tersimpan di database lokal,
-        diurutkan dari timestamp terbaru.
+        Tampilkan riwayat prediksi dari database lokal.
+        Setiap baris dapat dihapus secara individual.
       </div>
       <button class="btn btn-secondary" id="btn-history" onclick="loadHistory()">
         <span id="btn-history-text">Lihat Riwayat Prediksi</span>
@@ -257,15 +305,28 @@
       </button>
     </div>
 
+    <!-- Card 3: Harga Terakhir -->
+    <div class="action-card tertiary">
+      <div class="card-icon">📊</div>
+      <div class="card-label">Data Historis</div>
+      <div class="card-title">10 Harga Saham Terakhir</div>
+      <div class="card-desc">
+        Tampilkan 10 data harga OHLCV terakhir dari dataset
+        sebagai referensi kondisi pasar terkini.
+      </div>
+      <button class="btn btn-tertiary" id="btn-prices" onclick="loadRecentPrices()">
+        <span id="btn-prices-text">Lihat Harga Terakhir</span>
+        <div class="spinner" id="sp-prices"></div>
+      </button>
+    </div>
+
   </div>
 
-  <!-- ═══════════════════════════════════════════════════════════════════
-       #result — Semua output (prediksi & riwayat) ditampilkan di sini
-       ═══════════════════════════════════════════════════════════════════ -->
+  <!-- ── OUTPUT AREA ──────────────────────────────────────────────── -->
   <div id="result"></div>
 
   <div class="footer">
-    <div class="footer-l">Kelompok 2 &nbsp;·&nbsp; SimpleRNN &nbsp;·&nbsp; Inference Only</div>
+    <div class="footer-l">Kelompok 2 &nbsp;·&nbsp; SimpleRNN &nbsp;·&nbsp; Inference Only &nbsp;·&nbsp; v2.5.0</div>
     <div class="footer-r">
       <span class="ticker-chip">TLKM.JK</span>
       <span>Bursa Efek Indonesia</span>
@@ -274,223 +335,317 @@
 
 </div>
 
-<!-- ═══════════════════════════════════════════════════════════════════════
-     JAVASCRIPT — Frontend ↔ Backend via fetch() + async/await
-     ✓ Tidak ada reload halaman
-     ✓ Tidak ada retraining
-     ✓ Inference only
-     ═══════════════════════════════════════════════════════════════════════ -->
+<!-- ════════════════════════════════════════════════════════════════
+     JAVASCRIPT
+     ════════════════════════════════════════════════════════════════ -->
 <script>
 "use strict";
 
-/* ── FORMAT HELPERS ──────────────────────────────────────────────────────── */
-
-// Format angka ke Rupiah Indonesia
+/* ── FORMAT HELPERS ──────────────────────────────────────────────── */
 function fmtRp(v) {
-  return 'Rp ' + Number(v).toLocaleString('id-ID', {
-    minimumFractionDigits: 2, maximumFractionDigits: 2
-  });
+  return 'Rp ' + Number(v).toLocaleString('id-ID', {minimumFractionDigits:2, maximumFractionDigits:2});
 }
-
-// Format persen dengan tanda positif/negatif
 function fmtPct(v) {
   return (v >= 0 ? '+' : '') + Number(v).toFixed(4) + '%';
 }
-
-// Format perubahan harga dengan tanda
 function fmtChange(v) {
   return (v >= 0 ? '+' : '-') + fmtRp(Math.abs(v));
 }
-
-// CSS class berdasarkan nilai naik/turun/flat
-function cc(v) {
-  return v > 0 ? 'up' : v < 0 ? 'down' : 'flat';
+function fmtVol(v) {
+  return Number(v).toLocaleString('id-ID');
 }
-
-// Inline color style berdasarkan nilai
+function cc(v) { return v > 0 ? 'up' : v < 0 ? 'down' : 'flat'; }
 function ccStyle(v) {
   return v > 0 ? 'color:var(--green)' : v < 0 ? 'color:var(--red)' : 'color:var(--gold)';
 }
-
-// Badge tren berwarna: hijau (bullish), merah (bearish), emas (flat)
 function trendBadge(trend) {
   const cfg = {
-    bullish: ['bullish', '▲', 'BULLISH'],
-    bearish: ['bearish', '▼', 'BEARISH'],
-    flat:    ['flat',    '→', 'FLAT'   ],
+    bullish: ['bullish','▲','BULLISH'],
+    bearish: ['bearish','▼','BEARISH'],
+    flat:    ['flat',   '→','FLAT'   ],
   };
   const [cls, icon, label] = cfg[trend] || cfg.flat;
   return `<span class="trend-badge ${cls}">${icon} ${label}</span>`;
 }
 
-/* ── STATE TOMBOL ─────────────────────────────────────────────────────────── */
+/* ── TOAST ───────────────────────────────────────────────────────── */
+let _toastTimer = null;
+function showToast(msg, type = 'ok') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `show toast-${type}`;
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => { el.className = ''; }, 3000);
+}
+
+/* ── BUTTON STATE ────────────────────────────────────────────────── */
 function setBtnState(btnId, spId, textId, loading, normalText) {
   document.getElementById(btnId).disabled     = loading;
   document.getElementById(spId).style.display = loading ? 'block' : 'none';
   document.getElementById(textId).textContent = loading ? 'Memproses...' : normalText;
 }
 
-/* ── TAMPILAN SEMENTARA DI #result ───────────────────────────────────────── */
+/* ── LOADING / ERROR ─────────────────────────────────────────────── */
 function showLoading(msg) {
   document.getElementById('result').innerHTML =
     `<div class="skeleton-box"><div class="sk-spin"></div>${msg}</div>`;
 }
-
 function showError(msg) {
   document.getElementById('result').innerHTML =
     `<div class="error-box">⚠ ${msg}</div>`;
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
+/* ════════════════════════════════════════════════════════════════════
    runPrediction()
-   — fetch GET /predict
-   — tampilkan hasil di #result (tanpa reload halaman)
-   ═══════════════════════════════════════════════════════════════════════════ */
+   ════════════════════════════════════════════════════════════════════ */
 async function runPrediction() {
-  setBtnState('btn-predict','sp-predict','btn-predict-text', true,
-              'Klik untuk Melihat Hasil Prediksi');
+  setBtnState('btn-predict','sp-predict','btn-predict-text', true, 'Klik untuk Melihat Hasil Prediksi');
   showLoading('Menjalankan inferensi model SimpleRNN...');
 
   try {
-    // ── Panggil endpoint /predict via fetch() ────────────────────────────
-    const res  = await fetch('/predict', { method:'GET', headers:{'Accept':'application/json'} });
+    const res  = await fetch('/predict', {method:'GET', headers:{'Accept':'application/json'}});
     const data = await res.json();
+    if (!res.ok) throw new Error(data?.detail?.error || data?.detail || `HTTP ${res.status}`);
 
-    if (!res.ok) {
-      throw new Error(data?.detail?.error || data?.detail || `HTTP ${res.status}`);
-    }
+    // Badge: INSERT baru vs UPDATE hari ini
+    const upsertBadge = data.is_new_record
+      ? `<span class="upsert-badge badge-new">✦ Record Baru</span>`
+      : `<span class="upsert-badge badge-update">↻ Diperbarui</span>`;
 
-    // ── Render hasil ke #result ──────────────────────────────────────────
     document.getElementById('result').innerHTML = `
       <div class="result-card">
         <div class="result-header">
           <div class="rh-left">
             <div class="dot-live"></div>
             HASIL PREDIKSI TERBARU
+            &nbsp;${upsertBadge}
           </div>
           <div class="result-ts">${data.timestamp}</div>
         </div>
         <div class="result-grid">
-
           <div class="result-item">
             <div class="ri-label">Tanggal Prediksi</div>
             <div class="ri-value" style="font-size:17px">${data.prediction_date}</div>
             <div class="ri-sub">${data.prediction_day}</div>
           </div>
-
           <div class="result-item">
             <div class="ri-label">Harga Prediksi</div>
             <div class="ri-value up">${fmtRp(data.predicted_price)}</div>
             <div class="ri-sub">Close price (IDR)</div>
           </div>
-
           <div class="result-item">
             <div class="ri-label">Harga Terakhir</div>
             <div class="ri-value">${fmtRp(data.last_actual_price)}</div>
             <div class="ri-sub">${data.last_actual_date}</div>
           </div>
-
           <div class="result-item">
             <div class="ri-label">Perubahan</div>
             <div class="ri-value ${cc(data.price_change)}">${fmtChange(data.price_change)}</div>
-            <div class="ri-sub" style="${ccStyle(data.price_change)}">${fmtPct(data.price_change_pct)}</div>
+            <div class="ri-sub" style="${ccStyle(data.price_change_pct)}">${fmtPct(data.price_change_pct)}</div>
           </div>
-
           <div class="result-item" style="border-right:none">
             <div class="ri-label">Tren Prediksi</div>
             <div style="margin-top:6px">${trendBadge(data.trend)}</div>
-            <div class="ri-sub" style="margin-top:8px">Tersimpan #${data.saved_id}</div>
+            <div class="ri-sub" style="margin-top:8px">ID #${data.saved_id}</div>
           </div>
-
         </div>
       </div>
     `;
 
-    document.getElementById('result').scrollIntoView({ behavior:'smooth', block:'nearest' });
+    showToast(data.is_new_record ? '✓ Prediksi baru disimpan' : '↻ Prediksi hari ini diperbarui', 'ok');
+    document.getElementById('result').scrollIntoView({behavior:'smooth', block:'nearest'});
 
   } catch (err) {
     showError('Prediksi gagal: ' + err.message);
+    showToast('Prediksi gagal', 'err');
   } finally {
-    setBtnState('btn-predict','sp-predict','btn-predict-text', false,
-                'Klik untuk Melihat Hasil Prediksi');
+    setBtnState('btn-predict','sp-predict','btn-predict-text', false, 'Klik untuk Melihat Hasil Prediksi');
   }
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
-   loadHistory()
-   — fetch GET /history
-   — tampilkan tabel riwayat di #result (tanpa reload halaman)
-   — urutan: terbaru di atas (dihandle oleh backend ORDER BY timestamp DESC)
-   ═══════════════════════════════════════════════════════════════════════════ */
+/* ════════════════════════════════════════════════════════════════════
+   loadHistory()  — dengan tombol hapus per baris
+   ════════════════════════════════════════════════════════════════════ */
 async function loadHistory() {
-  setBtnState('btn-history','sp-history','btn-history-text', true,
-              'Lihat Riwayat Prediksi');
+  setBtnState('btn-history','sp-history','btn-history-text', true, 'Lihat Riwayat Prediksi');
   showLoading('Mengambil riwayat dari database SQLite...');
 
   try {
-    // ── Panggil endpoint /history via fetch() ────────────────────────────
-    const res  = await fetch('/history', { method:'GET', headers:{'Accept':'application/json'} });
+    const res  = await fetch('/history', {method:'GET', headers:{'Accept':'application/json'}});
     const data = await res.json();
+    if (!res.ok) throw new Error(data?.detail?.error || data?.detail || `HTTP ${res.status}`);
 
-    if (!res.ok) {
-      throw new Error(data?.detail?.error || data?.detail || `HTTP ${res.status}`);
-    }
-
-    // ── Buat baris tabel ─────────────────────────────────────────────────
     let tbody;
     if (!data.history || data.history.length === 0) {
-      tbody = `<tr><td colspan="8" class="empty-state">
+      tbody = `<tr><td colspan="9" class="empty-state">
         Belum ada riwayat.<br/>
-        <span style="font-size:12px;opacity:.6">Klik "Hasil Prediksi" terlebih dahulu.</span>
+        <span style="font-size:12px;opacity:.6">Klik "Jalankan Prediksi" terlebih dahulu.</span>
       </td></tr>`;
     } else {
-      // Loop seluruh data — urut terbaru (dari backend ORDER BY timestamp DESC)
       tbody = data.history.map(row => `
-        <tr>
+        <tr id="row-${row.id}">
           <td style="color:var(--muted);font-family:'DM Mono',monospace;font-size:11px">${row.id}</td>
-          <td style="font-family:'DM Mono',monospace;font-size:12px">${row.prediction_date}</td>
+          <td style="font-family:'DM Mono',monospace;font-size:12px;font-weight:600">${row.prediction_date}</td>
           <td style="font-weight:600;color:var(--accent)">${fmtRp(row.predicted_price)}</td>
           <td style="color:var(--muted)">${fmtRp(row.last_actual_price)}</td>
           <td style="${ccStyle(row.price_change)};font-weight:500">${fmtChange(row.price_change)}</td>
           <td style="${ccStyle(row.price_change_pct)}">${fmtPct(row.price_change_pct)}</td>
           <td>${trendBadge(row.trend)}</td>
           <td style="color:var(--muted);font-size:11px;font-family:'DM Mono',monospace">${row.timestamp}</td>
+          <td>
+            <button class="btn btn-danger" onclick="deleteRecord(${row.id})">🗑 Hapus</button>
+          </td>
         </tr>
       `).join('');
     }
 
-    // ── Render tabel ke #result ───────────────────────────────────────────
     document.getElementById('result').innerHTML = `
       <div class="history-wrap">
-        <div class="history-title">
-          🗂️ &nbsp; Riwayat Prediksi
-          <span style="margin-left:auto;color:var(--muted);font-size:10px">${data.total} record</span>
+        <div class="section-header">
+          <div class="section-title history-title-color">
+            🗂️ &nbsp; Riwayat Prediksi
+          </div>
+          <span class="section-count" id="history-count">${data.total} record</span>
         </div>
-        <table>
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Tgl Prediksi</th>
-              <th>Harga Prediksi</th>
-              <th>Harga Terakhir</th>
-              <th>Perubahan</th>
-              <th>%</th>
-              <th>Tren</th>
-              <th>Timestamp</th>
-            </tr>
-          </thead>
-          <tbody>${tbody}</tbody>
-        </table>
+        <div style="overflow-x:auto">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Tgl Prediksi</th>
+                <th>Harga Prediksi</th>
+                <th>Harga Terakhir</th>
+                <th>Perubahan</th>
+                <th>%</th>
+                <th>Tren</th>
+                <th>Timestamp</th>
+                <th>Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="history-tbody">${tbody}</tbody>
+          </table>
+        </div>
       </div>
     `;
 
-    document.getElementById('result').scrollIntoView({ behavior:'smooth', block:'nearest' });
+    document.getElementById('result').scrollIntoView({behavior:'smooth', block:'nearest'});
 
   } catch (err) {
     showError('Gagal memuat riwayat: ' + err.message);
+    showToast('Gagal memuat riwayat', 'err');
   } finally {
-    setBtnState('btn-history','sp-history','btn-history-text', false,
-                'Lihat Riwayat Prediksi');
+    setBtnState('btn-history','sp-history','btn-history-text', false, 'Lihat Riwayat Prediksi');
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   deleteRecord(id) — hapus satu baris tanpa reload halaman
+   ════════════════════════════════════════════════════════════════════ */
+async function deleteRecord(id) {
+  if (!confirm(`Hapus prediksi #${id}?`)) return;
+
+  try {
+    const res  = await fetch(`/delete/${id}`, {method:'DELETE', headers:{'Accept':'application/json'}});
+    const data = await res.json();
+    if (!res.ok) throw new Error(data?.detail?.error || `HTTP ${res.status}`);
+
+    // Hapus baris dari tabel tanpa reload
+    const row = document.getElementById(`row-${id}`);
+    if (row) {
+      row.style.transition = 'opacity .3s, transform .3s';
+      row.style.opacity    = '0';
+      row.style.transform  = 'translateX(20px)';
+      setTimeout(() => {
+        row.remove();
+        // Update counter
+        const countEl = document.getElementById('history-count');
+        if (countEl) {
+          const current = parseInt(countEl.textContent) || 0;
+          countEl.textContent = Math.max(0, current - 1) + ' record';
+        }
+        // Cek jika tabel kosong
+        const tbody = document.getElementById('history-tbody');
+        if (tbody && tbody.children.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="9" class="empty-state">
+            Belum ada riwayat.
+          </td></tr>`;
+        }
+      }, 300);
+    }
+
+    showToast(`✓ Prediksi #${id} dihapus`, 'ok');
+
+  } catch (err) {
+    showToast(`Gagal hapus #${id}: ${err.message}`, 'err');
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   loadRecentPrices() — 10 harga saham terakhir
+   ════════════════════════════════════════════════════════════════════ */
+async function loadRecentPrices() {
+  setBtnState('btn-prices','sp-prices','btn-prices-text', true, 'Lihat Harga Terakhir');
+  showLoading('Mengambil 10 harga saham terakhir...');
+
+  try {
+    const res  = await fetch('/recent-prices?n=10', {method:'GET', headers:{'Accept':'application/json'}});
+    const data = await res.json();
+    if (!res.ok) throw new Error(data?.detail?.error || `HTTP ${res.status}`);
+
+    let tbody;
+    if (!data.prices || data.prices.length === 0) {
+      tbody = `<tr><td colspan="7" class="empty-state">Data tidak tersedia.</td></tr>`;
+    } else {
+      tbody = data.prices.map((p, i) => `
+        <tr>
+          <td style="color:var(--muted);font-family:'DM Mono',monospace;font-size:11px">${i + 1}</td>
+          <td>
+            <span style="font-family:'DM Mono',monospace;font-size:12px;font-weight:600">${p.date}</span>
+            <span style="color:var(--muted);font-size:11px;margin-left:6px">${p.day}</span>
+          </td>
+          <td style="color:var(--muted)">${fmtRp(p.open)}</td>
+          <td style="color:var(--green)">${fmtRp(p.high)}</td>
+          <td style="color:var(--red)">${fmtRp(p.low)}</td>
+          <td style="font-weight:700;color:var(--accent)">${fmtRp(p.close)}</td>
+          <td style="color:var(--muted);font-size:12px">${fmtVol(p.volume)}</td>
+        </tr>
+      `).join('');
+    }
+
+    document.getElementById('result').innerHTML = `
+      <div class="prices-wrap">
+        <div class="section-header">
+          <div class="section-title prices-title">
+            📊 &nbsp; 10 Harga Saham Terakhir
+          </div>
+          <span class="section-count">TLKM.JK · terbaru di atas</span>
+        </div>
+        <div style="overflow-x:auto">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Tanggal</th>
+                <th>Open</th>
+                <th>High</th>
+                <th>Low</th>
+                <th>Close</th>
+                <th>Volume</th>
+              </tr>
+            </thead>
+            <tbody>${tbody}</tbody>
+          </table>
+        </div>
+      </div>
+    `;
+
+    document.getElementById('result').scrollIntoView({behavior:'smooth', block:'nearest'});
+
+  } catch (err) {
+    showError('Gagal memuat harga: ' + err.message);
+    showToast('Gagal memuat data harga', 'err');
+  } finally {
+    setBtnState('btn-prices','sp-prices','btn-prices-text', false, 'Lihat Harga Terakhir');
   }
 }
 </script>
