@@ -359,6 +359,28 @@ function buildApexSeries(labels, candles, volumes) {
   return { candleSeries, volSeries };
 }
 
+function getPriceAxisBounds(candles, paddingRatio = 0.02) {
+  if (!candles?.length) return { min: undefined, max: undefined };
+
+  const lows = candles.map(c => Number(c.l)).filter(Number.isFinite);
+  const highs = candles.map(c => Number(c.h)).filter(Number.isFinite);
+  if (!lows.length || !highs.length) return { min: undefined, max: undefined };
+
+  const rawMin = Math.min(...lows);
+  const rawMax = Math.max(...highs);
+  const range = rawMax - rawMin;
+
+  // Padding 1-2% dari rentang harga agar chart tidak terlalu mepet
+  const pad = range > 0
+    ? range * paddingRatio
+    : Math.max(rawMax * paddingRatio, 1);
+
+  return {
+    min: rawMin - pad,
+    max: rawMax + pad,
+  };
+}
+
 function createChart(labels, candles, volumes) {
   const { candleSeries, volSeries } = buildApexSeries(labels, candles, volumes);
   const n = labels.length;
@@ -368,6 +390,8 @@ function createChart(labels, candles, volumes) {
   const defEnd   = n - 1;
   _zoomStart = defStart;
   _zoomEnd   = defEnd;
+  const initialCandles = candles.slice(defStart, defEnd + 1);
+  const { min: priceMin, max: priceMax } = getPriceAxisBounds(initialCandles);
 
   const visibleLabels = labels.slice(defStart, defEnd + 1);
 
@@ -440,10 +464,13 @@ function createChart(labels, candles, volumes) {
     yaxis: [
       {
         seriesName: 'OHLC',
+        min: priceMin,
+        max: priceMax,
         labels: {
           style: { colors: '#6b82a8', fontSize: '10px' },
           formatter: v => 'Rp ' + Number(v).toLocaleString('id-ID'),
         },
+        forceNiceScale: false,
         tooltip: { enabled: true },
         axisBorder: { show: false },
       },
@@ -566,14 +593,22 @@ function _wheelHandler(e) {
 function applyZoom() {
   if (!apexChart || !_lastLabels.length) return;
   const sliceLabels  = _lastLabels.slice(_zoomStart, _zoomEnd + 1);
-  const sliceCandles = _lastCandles.slice(_zoomStart, _zoomEnd + 1).map((c,i) => ({
+  const currentCandles = _lastCandles.slice(_zoomStart, _zoomEnd + 1);
+  const { min: priceMin, max: priceMax } = getPriceAxisBounds(currentCandles);
+  const sliceCandles = currentCandles.map((c,i) => ({
     x: sliceLabels[i], y:[c.o,c.h,c.l,c.c]
   }));
   const sliceVol = _lastVolumes.slice(_zoomStart, _zoomEnd + 1).map((v,i) => ({
     x: sliceLabels[i], y: v.y, fillColor: v.color, strokeColor: v.color,
   }));
 
-  apexChart.updateOptions({ xaxis: { categories: sliceLabels } }, false, false);
+  apexChart.updateOptions({
+    xaxis: { categories: sliceLabels },
+    yaxis: [
+      { min: priceMin, max: priceMax },
+      { max: v => v * 5 },
+    ],
+  }, false, false);
   apexChart.updateSeries([
     { name: 'OHLC',   type: 'candlestick', data: sliceCandles },
     { name: 'Volume', type: 'bar',         data: sliceVol },
