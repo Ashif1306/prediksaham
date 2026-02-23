@@ -185,13 +185,14 @@ def update_latest_data() -> None:
             print("[update_latest_data] Dataset lama kosong. Update dibatalkan.")
             return
 
-        last_date = df_old.index[-1]
-        start_date = last_date.strftime("%Y-%m-%d")
+        last_date = pd.Timestamp(df_old.index[-1]).normalize()
+        fetch_start = (last_date + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
 
-        print(f"[update_latest_data] Ambil data terbaru TLKM.JK dari {start_date}...")
+        print(f"[update_latest_data] Last date lama: {last_date.strftime('%Y-%m-%d')}")
+        print(f"[update_latest_data] Ambil data terbaru TLKM.JK mulai {fetch_start}...")
         df_new = yf.download(
             "TLKM.JK",
-            start=start_date,
+            start=fetch_start,
             progress=False,
             auto_adjust=False,
             interval="1d",
@@ -215,8 +216,11 @@ def update_latest_data() -> None:
         df_new.index = pd.DatetimeIndex(df_new.index)
         df_new = df_new.sort_index()
 
-        if len(df_new) <= 1 and df_new.index[-1] <= last_date:
-            print("[update_latest_data] Tidak ada data baru setelah tanggal terakhir dataset lama.")
+        df_new = df_new[df_new.index > last_date].copy()
+        print(f"[update_latest_data] Jumlah baris data baru: {len(df_new)}")
+
+        if df_new.empty:
+            print("[update_latest_data] Tidak ada data baru.")
             return
 
         combined = pd.concat([df_old, df_new], axis=0)
@@ -226,13 +230,9 @@ def update_latest_data() -> None:
         combined = combined[~combined.index.duplicated(keep="last")]
         combined = combined.sort_index()
 
-        added_rows = len(combined) - len(df_old)
         combined.to_csv(DATA_PATH)
-
-        if added_rows > 0:
-            print(f"[update_latest_data] Update sukses. Baris baru ditambahkan: {added_rows}")
-        else:
-            print("[update_latest_data] Tidak ada baris baru untuk ditambahkan.")
+        print(f"[update_latest_data] Last date setelah update: {combined.index[-1].strftime('%Y-%m-%d')}")
+        print(f"[update_latest_data] Update sukses. Total data: {len(combined)} baris")
     except Exception as exc:
         # Jangan sampai endpoint /predict crash hanya karena update data gagal
         print(f"[update_latest_data] ERROR: {exc}")
