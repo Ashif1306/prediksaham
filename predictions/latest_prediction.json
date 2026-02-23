@@ -1,11 +1,11 @@
 {
-  "predicted_price": 3501.887607574463,
-  "prediction_date": "2026-02-23",
-  "prediction_day": "Monday",
-  "last_actual_date": "2026-02-20",
-  "last_actual_day": "Friday",
+  "predicted_price": 3492.166328430176,
+  "prediction_date": "2026-02-20",
+  "prediction_day": "Friday",
+  "last_actual_date": "2026-02-19",
+  "last_actual_day": "Thursday",
   "last_actual_price": 3480.0,
-  "price_change": 21.88760757446289,
-  "price_change_pct": 0.6289542406454853,
-  "timestamp": "2026-02-23 18:11:39"
+  "price_change": 12.166328430175781,
+  "price_change_pct": 0.34960713879815464,
+  "timestamp": "2026-02-24 06:02:57"
 }
