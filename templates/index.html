@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Prediksi Saham TLKM — Kelompok 2</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg:      #070d1a;
+      --surface: #0d1627;
+      --border:  #1a2a44;
+      --accent:  #00c8ff;
+      --green:   #0af5b0;
+      --red:     #ff4d6d;
+      --gold:    #f5c518;
+      --text:    #e8f0fe;
+      --muted:   #6b82a8;
+      --card:    #0f1c33;
+      --glow:    0 0 40px rgba(0,200,255,.18);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg); color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      min-height: 100vh; overflow-x: hidden;
+    }
+    body::before {
+      content: ''; position: fixed; inset: 0;
+      background-image:
+        linear-gradient(rgba(0,200,255,.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,200,255,.04) 1px, transparent 1px);
+      background-size: 48px 48px;
+      animation: gridMove 20s linear infinite;
+      pointer-events: none; z-index: 0;
+    }
+    @keyframes gridMove { from{background-position:0 0} to{background-position:48px 48px} }
+
+    .blob { position:fixed; border-radius:50%; filter:blur(100px); pointer-events:none; z-index:0; opacity:.35; }
+    .blob-1 { width:600px;height:600px;background:#003a5c;top:-200px;left:-200px;animation:float1 12s ease-in-out infinite; }
+    .blob-2 { width:500px;height:500px;background:#002a40;bottom:-150px;right:-150px;animation:float2 15s ease-in-out infinite; }
+    @keyframes float1 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(40px,30px)} }
+    @keyframes float2 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(-30px,40px)} }
+
+    .wrapper { position:relative;z-index:1;max-width:920px;margin:0 auto;padding:60px 24px 80px; }
+
+    .badge {
+      display:inline-block; font-family:'DM Mono',monospace;
+      font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+      color:var(--accent); border:1px solid rgba(0,200,255,.3);
+      background:rgba(0,200,255,.06); padding:5px 14px; border-radius:100px;
+      margin-bottom:28px; animation:fadeDown .6s ease both;
+    }
+    h1.title {
+      font-family:'DM Serif Display',serif;
+      font-size:clamp(20px,3.5vw,36px); line-height:1.25; color:#fff;
+      max-width:780px; animation:fadeDown .7s .1s ease both;
+    }
+    h1.title em { font-style:italic; color:var(--accent); }
+    .subtitle {
+      margin-top:14px;font-size:14px;color:var(--muted);
+      max-width:580px;line-height:1.7; animation:fadeDown .7s .2s ease both;
+    }
+    .ticker-chip {
+      background:rgba(0,200,255,.1);border:1px solid rgba(0,200,255,.2);
+      color:var(--accent);padding:2px 9px;border-radius:6px;
+      font-family:'DM Mono',monospace;font-size:11px;
+    }
+    .divider {
+      height:1px;
+      background:linear-gradient(90deg,transparent,var(--border),transparent);
+      margin:36px 0; animation:fadeDown .7s .3s ease both;
+    }
+
+    /* ACTION CARDS */
+    .actions { display:grid;grid-template-columns:1fr 1fr;gap:20px;animation:fadeDown .7s .4s ease both; }
+    @media(max-width:560px){ .actions{grid-template-columns:1fr;} }
+
+    .action-card {
+      position:relative;background:var(--card);border:1px solid var(--border);
+      border-radius:16px;padding:30px 26px;overflow:hidden;
+      transition:transform .25s,border-color .25s,box-shadow .25s;
+    }
+    .action-card::before {
+      content:'';position:absolute;inset:0;opacity:0;
+      transition:opacity .3s;border-radius:inherit;
+    }
+    .action-card.primary::before   { background:radial-gradient(circle at 70% 0%,rgba(0,200,255,.14),transparent 70%); }
+    .action-card.secondary::before { background:radial-gradient(circle at 70% 0%,rgba(10,245,176,.12),transparent 70%); }
+    .action-card:hover { transform:translateY(-4px);box-shadow:var(--glow); }
+    .action-card:hover::before { opacity:1; }
+    .action-card.primary:hover   { border-color:rgba(0,200,255,.5); }
+    .action-card.secondary:hover { border-color:rgba(10,245,176,.5); }
+
+    .card-icon { width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:16px; }
+    .primary   .card-icon { background:rgba(0,200,255,.12); }
+    .secondary .card-icon { background:rgba(10,245,176,.12); }
+    .card-label { font-size:10px;font-family:'DM Mono',monospace;letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px; }
+    .primary   .card-label { color:var(--accent); }
+    .secondary .card-label { color:var(--green); }
+    .card-title { font-size:17px;font-weight:600;color:#fff;margin-bottom:8px; }
+    .card-desc  { font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:22px; }
+
+    /* BUTTONS */
+    .btn {
+      display:inline-flex;align-items:center;gap:8px;
+      font-size:13px;font-weight:600;padding:10px 20px;
+      border-radius:8px;border:none;cursor:pointer;
+      font-family:'DM Sans',sans-serif;transition:all .2s ease;
+    }
+    .btn:disabled { opacity:.6;cursor:not-allowed;transform:none !important; }
+    .btn-primary  { background:var(--accent);color:#000; }
+    .btn-primary:hover:not(:disabled)  { background:#33d5ff;transform:scale(1.03); }
+    .btn-secondary { background:transparent;color:var(--green);border:1px solid rgba(10,245,176,.4); }
+    .btn-secondary:hover:not(:disabled){ background:rgba(10,245,176,.08);transform:scale(1.03); }
+
+    /* SPINNER */
+    .spinner { display:none;width:16px;height:16px;border-radius:50%;animation:spin .6s linear infinite;flex-shrink:0; }
+    .btn-primary  .spinner { border:2px solid rgba(0,0,0,.2);border-top-color:#000; }
+    .btn-secondary .spinner { border:2px solid rgba(10,245,176,.2);border-top-color:var(--green); }
+    @keyframes spin { to{transform:rotate(360deg)} }
+
+    /* #result wrapper */
+    #result { margin-top:36px; }
+
+    /* RESULT CARD */
+    .result-card {
+      background:var(--card);border:1px solid var(--border);
+      border-radius:16px;overflow:hidden;
+      animation:fadeDown .45s ease both;
+    }
+    .result-header {
+      display:flex;align-items:center;justify-content:space-between;
+      padding:16px 22px;border-bottom:1px solid var(--border);
+      background:rgba(0,200,255,.04);
+    }
+    .rh-left {
+      display:flex;align-items:center;gap:10px;
+      font-family:'DM Mono',monospace;font-size:11px;
+      color:var(--accent);letter-spacing:.08em;text-transform:uppercase;
+    }
+    .dot-live { width:8px;height:8px;background:var(--green);border-radius:50%;animation:pulse 1.5s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.3;transform:scale(1.5)} }
+    .result-ts { font-size:11px;color:var(--muted);font-family:'DM Mono',monospace; }
+
+    .result-grid { display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); }
+    .result-item {
+      padding:22px 20px;
+      border-right:1px solid var(--border);
+      border-bottom:1px solid var(--border);
+    }
+    .result-item:last-child { border-right:none; }
+    .ri-label { font-size:10px;font-family:'DM Mono',monospace;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px; }
+    .ri-value { font-size:20px;font-weight:700;color:#fff;font-family:'DM Serif Display',serif; }
+    .ri-value.up   { color:var(--green); }
+    .ri-value.down { color:var(--red);   }
+    .ri-value.flat { color:var(--gold);  }
+    .ri-sub { font-size:12px;color:var(--muted);margin-top:4px; }
+
+    /* TREND BADGE */
+    .trend-badge { display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:100px;font-size:11px;font-weight:600;letter-spacing:.05em; }
+    .bullish { background:rgba(10,245,176,.12);color:var(--green);border:1px solid rgba(10,245,176,.3); }
+    .bearish { background:rgba(255,77,109,.12); color:var(--red);  border:1px solid rgba(255,77,109,.3); }
+    .flat    { background:rgba(245,197,24,.12); color:var(--gold); border:1px solid rgba(245,197,24,.3); }
+
+    /* HISTORY */
+    .history-wrap { background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;overflow-x:auto;animation:fadeDown .45s ease both; }
+    .history-title {
+      display:flex;align-items:center;gap:10px;padding:16px 22px;
+      border-bottom:1px solid var(--border);background:rgba(10,245,176,.03);
+      font-family:'DM Mono',monospace;font-size:11px;
+      color:var(--green);letter-spacing:.1em;text-transform:uppercase;
+    }
+    table { width:100%;border-collapse:collapse;font-size:13px; }
+    thead { background:rgba(0,200,255,.03); }
+    th { padding:12px 16px;text-align:left;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border);white-space:nowrap; }
+    td { padding:13px 16px;border-bottom:1px solid rgba(26,42,68,.5);white-space:nowrap; }
+    tr:last-child td { border-bottom:none; }
+    tbody tr { transition:background .15s; }
+    tbody tr:hover { background:rgba(0,200,255,.03); }
+    .empty-state { padding:48px;text-align:center;color:var(--muted);font-size:14px; }
+
+    /* ERROR & SKELETON */
+    .error-box { background:rgba(255,77,109,.07);border:1px solid rgba(255,77,109,.3);border-radius:12px;padding:16px 20px;color:var(--red);font-size:13px;animation:fadeDown .4s ease both; }
+    .skeleton-box { background:var(--card);border:1px solid var(--border);border-radius:16px;padding:40px;text-align:center;color:var(--muted);font-size:14px;animation:fadeDown .4s ease both; }
+    .sk-spin { width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 14px; }
+
+    /* FOOTER */
+    .footer { margin-top:70px;padding-top:28px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px; }
+    .footer-l { font-size:12px;color:var(--muted);font-family:'DM Mono',monospace; }
+    .footer-r { display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted); }
+
+    @keyframes fadeDown { from{opacity:0;transform:translateY(-14px)} to{opacity:1;transform:translateY(0)} }
+  </style>
+</head>
+<body>
+
+<div class="blob blob-1"></div>
+<div class="blob blob-2"></div>
+
+<div class="wrapper">
+
+  <div class="badge">✦ Selamat Datang di Project Kelompok 2</div>
+
+  <h1 class="title">
+    Prediksi Harga Saham<br/>
+    <em>PT Telkom Indonesia (Persero) Tbk</em><br/>
+    Menggunakan Algoritma Recurrent Neural Network (RNN)
+  </h1>
+
+  <p class="subtitle">
+    Sistem inferensi berbasis <strong style="color:var(--text)">SimpleRNN</strong>
+    untuk memprediksi harga penutupan <span class="ticker-chip">TLKM.JK</span>
+    pada hari perdagangan berikutnya.
+    Data historis sejak 2008 &mdash; <em>inference only, no retraining.</em>
+  </p>
+
+  <div class="divider"></div>
+
+  <!-- ACTION CARDS -->
+  <div class="actions">
+
+    <div class="action-card primary">
+      <div class="card-icon">📈</div>
+      <div class="card-label">Inference Engine</div>
+      <div class="card-title">Jalankan Prediksi</div>
+      <div class="card-desc">
+        Gunakan model SimpleRNN untuk memprediksi harga penutupan TLKM
+        pada hari perdagangan berikutnya secara real-time.
+      </div>
+      <button class="btn btn-primary" id="btn-predict" onclick="runPrediction()">
+        <span id="btn-predict-text">Klik untuk Melihat Hasil Prediksi</span>
+        <div class="spinner" id="sp-predict"></div>
+      </button>
+    </div>
+
+    <div class="action-card secondary">
+      <div class="card-icon">🗂️</div>
+      <div class="card-label">SQLite Database</div>
+      <div class="card-title">Lihat Riwayat Prediksi</div>
+      <div class="card-desc">
+        Tampilkan seluruh riwayat prediksi yang tersimpan di database lokal,
+        diurutkan dari timestamp terbaru.
+      </div>
+      <button class="btn btn-secondary" id="btn-history" onclick="loadHistory()">
+        <span id="btn-history-text">Lihat Riwayat Prediksi</span>
+        <div class="spinner" id="sp-history"></div>
+      </button>
+    </div>
+
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       #result — Semua output (prediksi & riwayat) ditampilkan di sini
+       ═══════════════════════════════════════════════════════════════════ -->
+  <div id="result"></div>
+
+  <div class="footer">
+    <div class="footer-l">Kelompok 2 &nbsp;·&nbsp; SimpleRNN &nbsp;·&nbsp; Inference Only</div>
+    <div class="footer-r">
+      <span class="ticker-chip">TLKM.JK</span>
+      <span>Bursa Efek Indonesia</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     JAVASCRIPT — Frontend ↔ Backend via fetch() + async/await
+     ✓ Tidak ada reload halaman
+     ✓ Tidak ada retraining
+     ✓ Inference only
+     ═══════════════════════════════════════════════════════════════════════ -->
+<script>
+"use strict";
+
+/* ── FORMAT HELPERS ──────────────────────────────────────────────────────── */
+
+// Format angka ke Rupiah Indonesia
+function fmtRp(v) {
+  return 'Rp ' + Number(v).toLocaleString('id-ID', {
+    minimumFractionDigits: 2, maximumFractionDigits: 2
+  });
+}
+
+// Format persen dengan tanda positif/negatif
+function fmtPct(v) {
+  return (v >= 0 ? '+' : '') + Number(v).toFixed(4) + '%';
+}
+
+// Format perubahan harga dengan tanda
+function fmtChange(v) {
+  return (v >= 0 ? '+' : '-') + fmtRp(Math.abs(v));
+}
+
+// CSS class berdasarkan nilai naik/turun/flat
+function cc(v) {
+  return v > 0 ? 'up' : v < 0 ? 'down' : 'flat';
+}
+
+// Inline color style berdasarkan nilai
+function ccStyle(v) {
+  return v > 0 ? 'color:var(--green)' : v < 0 ? 'color:var(--red)' : 'color:var(--gold)';
+}
+
+// Badge tren berwarna: hijau (bullish), merah (bearish), emas (flat)
+function trendBadge(trend) {
+  const cfg = {
+    bullish: ['bullish', '▲', 'BULLISH'],
+    bearish: ['bearish', '▼', 'BEARISH'],
+    flat:    ['flat',    '→', 'FLAT'   ],
+  };
+  const [cls, icon, label] = cfg[trend] || cfg.flat;
+  return `<span class="trend-badge ${cls}">${icon} ${label}</span>`;
+}
+
+/* ── STATE TOMBOL ─────────────────────────────────────────────────────────── */
+function setBtnState(btnId, spId, textId, loading, normalText) {
+  document.getElementById(btnId).disabled     = loading;
+  document.getElementById(spId).style.display = loading ? 'block' : 'none';
+  document.getElementById(textId).textContent = loading ? 'Memproses...' : normalText;
+}
+
+/* ── TAMPILAN SEMENTARA DI #result ───────────────────────────────────────── */
+function showLoading(msg) {
+  document.getElementById('result').innerHTML =
+    `<div class="skeleton-box"><div class="sk-spin"></div>${msg}</div>`;
+}
+
+function showError(msg) {
+  document.getElementById('result').innerHTML =
+    `<div class="error-box">⚠ ${msg}</div>`;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   runPrediction()
+   — fetch GET /predict
+   — tampilkan hasil di #result (tanpa reload halaman)
+   ═══════════════════════════════════════════════════════════════════════════ */
+async function runPrediction() {
+  setBtnState('btn-predict','sp-predict','btn-predict-text', true,
+              'Klik untuk Melihat Hasil Prediksi');
+  showLoading('Menjalankan inferensi model SimpleRNN...');
+
+  try {
+    // ── Panggil endpoint /predict via fetch() ────────────────────────────
+    const res  = await fetch('/predict', { method:'GET', headers:{'Accept':'application/json'} });
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data?.detail?.error || data?.detail || `HTTP ${res.status}`);
+    }
+
+    // ── Render hasil ke #result ──────────────────────────────────────────
+    document.getElementById('result').innerHTML = `
+      <div class="result-card">
+        <div class="result-header">
+          <div class="rh-left">
+            <div class="dot-live"></div>
+            HASIL PREDIKSI TERBARU
+          </div>
+          <div class="result-ts">${data.timestamp}</div>
+        </div>
+        <div class="result-grid">
+
+          <div class="result-item">
+            <div class="ri-label">Tanggal Prediksi</div>
+            <div class="ri-value" style="font-size:17px">${data.prediction_date}</div>
+            <div class="ri-sub">${data.prediction_day}</div>
+          </div>
+
+          <div class="result-item">
+            <div class="ri-label">Harga Prediksi</div>
+            <div class="ri-value up">${fmtRp(data.predicted_price)}</div>
+            <div class="ri-sub">Close price (IDR)</div>
+          </div>
+
+          <div class="result-item">
+            <div class="ri-label">Harga Terakhir</div>
+            <div class="ri-value">${fmtRp(data.last_actual_price)}</div>
+            <div class="ri-sub">${data.last_actual_date}</div>
+          </div>
+
+          <div class="result-item">
+            <div class="ri-label">Perubahan</div>
+            <div class="ri-value ${cc(data.price_change)}">${fmtChange(data.price_change)}</div>
+            <div class="ri-sub" style="${ccStyle(data.price_change)}">${fmtPct(data.price_change_pct)}</div>
+          </div>
+
+          <div class="result-item" style="border-right:none">
+            <div class="ri-label">Tren Prediksi</div>
+            <div style="margin-top:6px">${trendBadge(data.trend)}</div>
+            <div class="ri-sub" style="margin-top:8px">Tersimpan #${data.saved_id}</div>
+          </div>
+
+        </div>
+      </div>
+    `;
+
+    document.getElementById('result').scrollIntoView({ behavior:'smooth', block:'nearest' });
+
+  } catch (err) {
+    showError('Prediksi gagal: ' + err.message);
+  } finally {
+    setBtnState('btn-predict','sp-predict','btn-predict-text', false,
+                'Klik untuk Melihat Hasil Prediksi');
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   loadHistory()
+   — fetch GET /history
+   — tampilkan tabel riwayat di #result (tanpa reload halaman)
+   — urutan: terbaru di atas (dihandle oleh backend ORDER BY timestamp DESC)
+   ═══════════════════════════════════════════════════════════════════════════ */
+async function loadHistory() {
+  setBtnState('btn-history','sp-history','btn-history-text', true,
+              'Lihat Riwayat Prediksi');
+  showLoading('Mengambil riwayat dari database SQLite...');
+
+  try {
+    // ── Panggil endpoint /history via fetch() ────────────────────────────
+    const res  = await fetch('/history', { method:'GET', headers:{'Accept':'application/json'} });
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data?.detail?.error || data?.detail || `HTTP ${res.status}`);
+    }
+
+    // ── Buat baris tabel ─────────────────────────────────────────────────
+    let tbody;
+    if (!data.history || data.history.length === 0) {
+      tbody = `<tr><td colspan="8" class="empty-state">
+        Belum ada riwayat.<br/>
+        <span style="font-size:12px;opacity:.6">Klik "Hasil Prediksi" terlebih dahulu.</span>
+      </td></tr>`;
+    } else {
+      // Loop seluruh data — urut terbaru (dari backend ORDER BY timestamp DESC)
+      tbody = data.history.map(row => `
+        <tr>
+          <td style="color:var(--muted);font-family:'DM Mono',monospace;font-size:11px">${row.id}</td>
+          <td style="font-family:'DM Mono',monospace;font-size:12px">${row.prediction_date}</td>
+          <td style="font-weight:600;color:var(--accent)">${fmtRp(row.predicted_price)}</td>
+          <td style="color:var(--muted)">${fmtRp(row.last_actual_price)}</td>
+          <td style="${ccStyle(row.price_change)};font-weight:500">${fmtChange(row.price_change)}</td>
+          <td style="${ccStyle(row.price_change_pct)}">${fmtPct(row.price_change_pct)}</td>
+          <td>${trendBadge(row.trend)}</td>
+          <td style="color:var(--muted);font-size:11px;font-family:'DM Mono',monospace">${row.timestamp}</td>
+        </tr>
+      `).join('');
+    }
+
+    // ── Render tabel ke #result ───────────────────────────────────────────
+    document.getElementById('result').innerHTML = `
+      <div class="history-wrap">
+        <div class="history-title">
+          🗂️ &nbsp; Riwayat Prediksi
+          <span style="margin-left:auto;color:var(--muted);font-size:10px">${data.total} record</span>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Tgl Prediksi</th>
+              <th>Harga Prediksi</th>
+              <th>Harga Terakhir</th>
+              <th>Perubahan</th>
+              <th>%</th>
+              <th>Tren</th>
+              <th>Timestamp</th>
+            </tr>
+          </thead>
+          <tbody>${tbody}</tbody>
+        </table>
+      </div>
+    `;
+
+    document.getElementById('result').scrollIntoView({ behavior:'smooth', block:'nearest' });
+
+  } catch (err) {
+    showError('Gagal memuat riwayat: ' + err.message);
+  } finally {
+    setBtnState('btn-history','sp-history','btn-history-text', false,
+                'Lihat Riwayat Prediksi');
+  }
+}
+</script>
+</body>
+</html>
