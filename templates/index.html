@@ -1,653 +1,800 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Prediksi Saham TLKM — Kelompok 2</title>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <!-- ApexCharts -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/apexcharts/3.44.0/apexcharts.min.js"></script>
   <style>
     :root {
-      --bg:      #070d1a;
-      --surface: #0d1627;
-      --border:  #1a2a44;
-      --accent:  #00c8ff;
-      --green:   #0af5b0;
-      --red:     #ff4d6d;
-      --gold:    #f5c518;
-      --text:    #e8f0fe;
-      --muted:   #6b82a8;
-      --card:    #0f1c33;
-      --glow:    0 0 40px rgba(0,200,255,.18);
+      --bg:    #070d1a; --surface:#0d1627; --border:#1a2a44;
+      --accent:#00c8ff; --green:#0af5b0;   --red:#ff4d6d;
+      --gold:  #f5c518; --text:#e8f0fe;    --muted:#6b82a8;
+      --card:  #0f1c33; --glow:0 0 40px rgba(0,200,255,.18);
     }
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html { scroll-behavior: smooth; }
-    body {
-      background: var(--bg); color: var(--text);
-      font-family: 'DM Sans', sans-serif;
-      min-height: 100vh; overflow-x: hidden;
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{scroll-behavior:smooth}
+    body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;overflow-x:hidden}
+    body::before{
+      content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+      background-image:linear-gradient(rgba(0,200,255,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(0,200,255,.04) 1px,transparent 1px);
+      background-size:48px 48px;animation:gridMove 20s linear infinite;
     }
-    body::before {
-      content: ''; position: fixed; inset: 0;
-      background-image:
-        linear-gradient(rgba(0,200,255,.04) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(0,200,255,.04) 1px, transparent 1px);
-      background-size: 48px 48px;
-      animation: gridMove 20s linear infinite;
-      pointer-events: none; z-index: 0;
-    }
-    @keyframes gridMove { from{background-position:0 0} to{background-position:48px 48px} }
+    @keyframes gridMove{from{background-position:0 0}to{background-position:48px 48px}}
+    .blob{position:fixed;border-radius:50%;filter:blur(100px);pointer-events:none;z-index:0;opacity:.35}
+    .blob-1{width:600px;height:600px;background:#003a5c;top:-200px;left:-200px;animation:f1 12s ease-in-out infinite}
+    .blob-2{width:500px;height:500px;background:#002a40;bottom:-150px;right:-150px;animation:f2 15s ease-in-out infinite}
+    @keyframes f1{0%,100%{transform:translate(0,0)}50%{transform:translate(40px,30px)}}
+    @keyframes f2{0%,100%{transform:translate(0,0)}50%{transform:translate(-30px,40px)}}
 
-    .blob { position:fixed; border-radius:50%; filter:blur(100px); pointer-events:none; z-index:0; opacity:.35; }
-    .blob-1 { width:600px;height:600px;background:#003a5c;top:-200px;left:-200px;animation:float1 12s ease-in-out infinite; }
-    .blob-2 { width:500px;height:500px;background:#002a40;bottom:-150px;right:-150px;animation:float2 15s ease-in-out infinite; }
-    @keyframes float1 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(40px,30px)} }
-    @keyframes float2 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(-30px,40px)} }
+    .wrapper{position:relative;z-index:1;max-width:960px;margin:0 auto;padding:60px 24px 80px}
 
-    .wrapper { position:relative;z-index:1;max-width:960px;margin:0 auto;padding:60px 24px 80px; }
+    /* ── HEADER ───── */
+    .badge{display:inline-block;font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);border:1px solid rgba(0,200,255,.3);background:rgba(0,200,255,.06);padding:5px 14px;border-radius:100px;margin-bottom:28px;animation:fd .6s ease both}
+    h1.title{font-family:'DM Serif Display',serif;font-size:clamp(20px,3.5vw,36px);line-height:1.25;color:#fff;max-width:780px;animation:fd .7s .1s ease both}
+    h1.title em{font-style:italic;color:var(--accent)}
+    .subtitle{margin-top:14px;font-size:14px;color:var(--muted);max-width:580px;line-height:1.7;animation:fd .7s .2s ease both}
+    .ticker-chip{background:rgba(0,200,255,.1);border:1px solid rgba(0,200,255,.2);color:var(--accent);padding:2px 9px;border-radius:6px;font-family:'DM Mono',monospace;font-size:11px}
+    .divider{height:1px;background:linear-gradient(90deg,transparent,var(--border),transparent);margin:36px 0;animation:fd .7s .3s ease both}
 
-    .badge {
-      display:inline-block; font-family:'DM Mono',monospace;
-      font-size:11px;letter-spacing:.12em;text-transform:uppercase;
-      color:var(--accent); border:1px solid rgba(0,200,255,.3);
-      background:rgba(0,200,255,.06); padding:5px 14px; border-radius:100px;
-      margin-bottom:28px; animation:fadeDown .6s ease both;
+    /* ══════════════════════════════════════════════════════
+       CHART SECTION
+       ══════════════════════════════════════════════════════ */
+    .chart-section{background:var(--card);border:1px solid var(--border);border-radius:20px;overflow:hidden;margin-bottom:36px;animation:fd .7s .35s ease both;box-shadow:0 0 60px rgba(0,200,255,.06)}
+
+    .chart-top{padding:20px 22px 0;display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:14px}
+
+    /* Ticker info */
+    .ct-label{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+    .ct-name{font-family:'DM Serif Display',serif;font-size:20px;color:#fff;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+    .ct-price{font-size:28px;font-weight:700;color:var(--accent);font-family:'DM Serif Display',serif}
+    .ct-badge{font-size:12px;font-family:'DM Mono',monospace;padding:3px 10px;border-radius:6px;font-weight:600}
+    .ct-badge.up  {background:rgba(10,245,176,.12);color:var(--green)}
+    .ct-badge.down{background:rgba(255,77,109,.12);color:var(--red)}
+    .ct-badge.flat{background:rgba(245,197,24,.10);color:var(--gold)}
+    .ct-meta{font-size:11px;color:var(--muted);margin-top:7px;font-family:'DM Mono',monospace;display:flex;gap:18px;flex-wrap:wrap}
+    .ct-meta b{color:var(--text)}
+
+    /* Range buttons */
+    .range-row{display:flex;gap:5px;align-items:center;flex-wrap:wrap;padding-top:2px}
+    .rb{font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.05em;padding:6px 15px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;transition:all .18s ease}
+    .rb:hover{border-color:rgba(0,200,255,.4);color:var(--accent)}
+    .rb.active{background:rgba(0,200,255,.12);border-color:rgba(0,200,255,.55);color:var(--accent);box-shadow:0 0 14px rgba(0,200,255,.14)}
+
+    /* Chart wrapper */
+    .chart-wrap{
+      position:relative;padding:12px 10px 4px;
+      /* Scroll zoom hint */
+      cursor:crosshair;
     }
-    h1.title {
-      font-family:'DM Serif Display',serif;
-      font-size:clamp(20px,3.5vw,36px); line-height:1.25; color:#fff;
-      max-width:780px; animation:fadeDown .7s .1s ease both;
+    #apex-chart{height:420px}
+
+    /* Overlay */
+    .chart-ov{
+      position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;
+      background:rgba(7,13,26,.88);border-radius:12px;z-index:20;font-size:14px;color:var(--muted);backdrop-filter:blur(4px);
+      transition:opacity .3s;
     }
-    h1.title em { font-style:italic; color:var(--accent); }
-    .subtitle {
-      margin-top:14px;font-size:14px;color:var(--muted);
-      max-width:580px;line-height:1.7; animation:fadeDown .7s .2s ease both;
-    }
-    .ticker-chip {
-      background:rgba(0,200,255,.1);border:1px solid rgba(0,200,255,.2);
-      color:var(--accent);padding:2px 9px;border-radius:6px;
-      font-family:'DM Mono',monospace;font-size:11px;
-    }
-    .divider {
-      height:1px;
-      background:linear-gradient(90deg,transparent,var(--border),transparent);
-      margin:36px 0; animation:fadeDown .7s .3s ease both;
+    .chart-ov.hidden{opacity:0;pointer-events:none}
+    .chart-ov .sk{width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+    .chart-ov.err-ov{color:var(--red)}
+
+    /* Zoom hint */
+    .zoom-hint{
+      display:flex;align-items:center;gap:6px;padding:4px 10px 8px 10px;
+      font-size:10px;color:var(--muted);font-family:'DM Mono',monospace;letter-spacing:.04em;
+      justify-content:flex-end;
     }
 
-    /* ── ACTION CARDS ────────────────────────────────────── */
-    .actions { display:grid;grid-template-columns:repeat(3,1fr);gap:16px;animation:fadeDown .7s .4s ease both; }
-    @media(max-width:680px){ .actions{grid-template-columns:1fr;} }
-    @media(min-width:681px) and (max-width:860px){ .actions{grid-template-columns:1fr 1fr;} }
+    /* ── ACTION CARDS ─── */
+    .actions{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;animation:fd .7s .5s ease both}
+    @media(max-width:680px){.actions{grid-template-columns:1fr}}
+    @media(min-width:681px) and (max-width:860px){.actions{grid-template-columns:1fr 1fr}}
+    .action-card{position:relative;background:var(--card);border:1px solid var(--border);border-radius:16px;padding:26px 22px;overflow:hidden;transition:transform .25s,border-color .25s,box-shadow .25s}
+    .action-card::before{content:'';position:absolute;inset:0;opacity:0;transition:opacity .3s;border-radius:inherit;pointer-events:none}
+    .action-card.primary::before  {background:radial-gradient(circle at 70% 0%,rgba(0,200,255,.14),transparent 70%)}
+    .action-card.secondary::before{background:radial-gradient(circle at 70% 0%,rgba(10,245,176,.12),transparent 70%)}
+    .action-card.tertiary::before {background:radial-gradient(circle at 70% 0%,rgba(245,197,24,.10),transparent 70%)}
+    .action-card:hover{transform:translateY(-4px);box-shadow:var(--glow)}
+    .action-card:hover::before{opacity:1}
+    .action-card.primary:hover  {border-color:rgba(0,200,255,.5)}
+    .action-card.secondary:hover{border-color:rgba(10,245,176,.5)}
+    .action-card.tertiary:hover {border-color:rgba(245,197,24,.4)}
+    .card-icon{width:40px;height:40px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:19px;margin-bottom:14px}
+    .primary  .card-icon{background:rgba(0,200,255,.12)}
+    .secondary.card-icon,.secondary .card-icon{background:rgba(10,245,176,.12)}
+    .tertiary .card-icon{background:rgba(245,197,24,.12)}
+    .card-label{font-size:10px;font-family:'DM Mono',monospace;letter-spacing:.1em;text-transform:uppercase;margin-bottom:5px}
+    .primary   .card-label{color:var(--accent)}
+    .secondary .card-label{color:var(--green)}
+    .tertiary  .card-label{color:var(--gold)}
+    .card-title{font-size:16px;font-weight:600;color:#fff;margin-bottom:7px}
+    .card-desc {font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:20px;min-height:48px}
 
-    .action-card {
-      position:relative;background:var(--card);border:1px solid var(--border);
-      border-radius:16px;padding:26px 22px;overflow:hidden;
-      transition:transform .25s,border-color .25s,box-shadow .25s;
-    }
-    .action-card::before {
-      content:'';position:absolute;inset:0;opacity:0;transition:opacity .3s;
-      border-radius:inherit;pointer-events:none;
-    }
-    .action-card.primary::before   { background:radial-gradient(circle at 70% 0%,rgba(0,200,255,.14),transparent 70%); }
-    .action-card.secondary::before { background:radial-gradient(circle at 70% 0%,rgba(10,245,176,.12),transparent 70%); }
-    .action-card.tertiary::before  { background:radial-gradient(circle at 70% 0%,rgba(245,197,24,.10),transparent 70%); }
-    .action-card:hover { transform:translateY(-4px);box-shadow:var(--glow); }
-    .action-card:hover::before { opacity:1; }
-    .action-card.primary:hover   { border-color:rgba(0,200,255,.5); }
-    .action-card.secondary:hover { border-color:rgba(10,245,176,.5); }
-    .action-card.tertiary:hover  { border-color:rgba(245,197,24,.4); }
+    /* ── BUTTONS ─── */
+    .btn{display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:600;padding:9px 18px;border-radius:8px;border:none;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .2s ease}
+    .btn:disabled{opacity:.6;cursor:not-allowed;transform:none!important}
+    .btn-primary  {background:var(--accent);color:#000}
+    .btn-primary:hover:not(:disabled){background:#33d5ff;transform:scale(1.03)}
+    .btn-secondary{background:transparent;color:var(--green);border:1px solid rgba(10,245,176,.4)}
+    .btn-secondary:hover:not(:disabled){background:rgba(10,245,176,.08);transform:scale(1.03)}
+    .btn-tertiary {background:transparent;color:var(--gold);border:1px solid rgba(245,197,24,.4)}
+    .btn-tertiary:hover:not(:disabled){background:rgba(245,197,24,.08);transform:scale(1.03)}
+    .btn-danger   {background:transparent;color:var(--red);border:1px solid rgba(255,77,109,.35);padding:5px 10px;font-size:11px;border-radius:6px}
+    .btn-danger:hover{background:rgba(255,77,109,.1);border-color:rgba(255,77,109,.6)}
+    .spinner{display:none;width:14px;height:14px;border-radius:50%;animation:spin .6s linear infinite;flex-shrink:0}
+    .btn-primary  .spinner{border:2px solid rgba(0,0,0,.2);border-top-color:#000}
+    .btn-secondary .spinner,.btn-tertiary .spinner{border:2px solid rgba(255,255,255,.15);border-top-color:currentColor}
+    @keyframes spin{to{transform:rotate(360deg)}}
 
-    .card-icon { width:40px;height:40px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:19px;margin-bottom:14px; }
-    .primary   .card-icon { background:rgba(0,200,255,.12); }
-    .secondary .card-icon { background:rgba(10,245,176,.12); }
-    .tertiary  .card-icon { background:rgba(245,197,24,.12); }
-    .card-label { font-size:10px;font-family:'DM Mono',monospace;letter-spacing:.1em;text-transform:uppercase;margin-bottom:5px; }
-    .primary   .card-label { color:var(--accent); }
-    .secondary .card-label { color:var(--green); }
-    .tertiary  .card-label { color:var(--gold); }
-    .card-title { font-size:16px;font-weight:600;color:#fff;margin-bottom:7px; }
-    .card-desc  { font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:20px;min-height:48px; }
+    /* ── OUTPUT AREA ─── */
+    #result{margin-top:32px}
+    .result-card{background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;animation:fd .45s ease both;margin-bottom:20px}
+    .result-header{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border);background:rgba(0,200,255,.04)}
+    .rh-left{display:flex;align-items:center;gap:10px;font-family:'DM Mono',monospace;font-size:11px;color:var(--accent);letter-spacing:.08em;text-transform:uppercase}
+    .dot-live{width:8px;height:8px;background:var(--green);border-radius:50%;animation:pulse 1.5s infinite}
+    @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.3;transform:scale(1.5)}}
+    .result-ts{font-size:11px;color:var(--muted);font-family:'DM Mono',monospace}
+    .upsert-badge{font-size:10px;font-family:'DM Mono',monospace;padding:3px 9px;border-radius:100px;letter-spacing:.06em;text-transform:uppercase}
+    .badge-new   {background:rgba(10,245,176,.12);color:var(--green);border:1px solid rgba(10,245,176,.3)}
+    .badge-update{background:rgba(245,197,24,.10);color:var(--gold); border:1px solid rgba(245,197,24,.3)}
+    .result-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+    .result-item{padding:20px 18px;border-right:1px solid var(--border);border-bottom:1px solid var(--border)}
+    .result-item:last-child{border-right:none}
+    .ri-label{font-size:10px;font-family:'DM Mono',monospace;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:7px}
+    .ri-value{font-size:19px;font-weight:700;color:#fff;font-family:'DM Serif Display',serif}
+    .ri-value.up  {color:var(--green)}.ri-value.down{color:var(--red)}.ri-value.flat{color:var(--gold)}
+    .ri-sub{font-size:12px;color:var(--muted);margin-top:4px}
+    .trend-badge{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:100px;font-size:11px;font-weight:600;letter-spacing:.05em}
+    .bullish{background:rgba(10,245,176,.12);color:var(--green);border:1px solid rgba(10,245,176,.3)}
+    .bearish{background:rgba(255,77,109,.12);color:var(--red);  border:1px solid rgba(255,77,109,.3)}
+    .flat   {background:rgba(245,197,24,.12);color:var(--gold); border:1px solid rgba(245,197,24,.3)}
 
-    /* ── BUTTONS ─────────────────────────────────────────── */
-    .btn {
-      display:inline-flex;align-items:center;gap:8px;
-      font-size:12px;font-weight:600;padding:9px 18px;
-      border-radius:8px;border:none;cursor:pointer;
-      font-family:'DM Sans',sans-serif;transition:all .2s ease;
-    }
-    .btn:disabled { opacity:.6;cursor:not-allowed;transform:none !important; }
-    .btn-primary   { background:var(--accent);color:#000; }
-    .btn-primary:hover:not(:disabled)  { background:#33d5ff;transform:scale(1.03); }
-    .btn-secondary { background:transparent;color:var(--green);border:1px solid rgba(10,245,176,.4); }
-    .btn-secondary:hover:not(:disabled){ background:rgba(10,245,176,.08);transform:scale(1.03); }
-    .btn-tertiary  { background:transparent;color:var(--gold);border:1px solid rgba(245,197,24,.4); }
-    .btn-tertiary:hover:not(:disabled) { background:rgba(245,197,24,.08);transform:scale(1.03); }
-    .btn-danger    { background:transparent;color:var(--red);border:1px solid rgba(255,77,109,.35);
-                     padding:5px 10px;font-size:11px;border-radius:6px; }
-    .btn-danger:hover { background:rgba(255,77,109,.1);border-color:rgba(255,77,109,.6); }
+    /* ── TABLE ─── */
+    .table-wrap{background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;animation:fd .45s ease both;margin-bottom:20px}
+    .section-header{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border)}
+    .section-title{display:flex;align-items:center;gap:10px;font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase}
+    .prices-title{color:var(--gold)}.history-title-color{color:var(--green)}
+    .section-count{color:var(--muted);font-size:10px;font-family:'DM Mono',monospace}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    thead{background:rgba(0,200,255,.03)}
+    th{padding:11px 14px;text-align:left;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border);white-space:nowrap}
+    td{padding:12px 14px;border-bottom:1px solid rgba(26,42,68,.5);white-space:nowrap}
+    tr:last-child td{border-bottom:none}
+    tbody tr{transition:background .15s}
+    tbody tr:hover{background:rgba(0,200,255,.03)}
+    .empty-state{padding:40px;text-align:center;color:var(--muted);font-size:14px}
 
-    /* ── SPINNER ─────────────────────────────────────────── */
-    .spinner { display:none;width:14px;height:14px;border-radius:50%;animation:spin .6s linear infinite;flex-shrink:0; }
-    .btn-primary  .spinner { border:2px solid rgba(0,0,0,.2);border-top-color:#000; }
-    .btn-secondary .spinner,.btn-tertiary .spinner { border:2px solid rgba(255,255,255,.15);border-top-color:currentColor; }
-    @keyframes spin { to{transform:rotate(360deg)} }
+    .error-box{background:rgba(255,77,109,.07);border:1px solid rgba(255,77,109,.3);border-radius:12px;padding:14px 18px;color:var(--red);font-size:13px;animation:fd .4s ease both}
+    .skeleton-box{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:36px;text-align:center;color:var(--muted);font-size:14px;animation:fd .4s ease both}
+    .sk-spin{width:26px;height:26px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 12px}
 
-    /* ── OUTPUT AREA ─────────────────────────────────────── */
-    #result { margin-top:32px; }
+    /* ── TOAST ─── */
+    #toast{position:fixed;bottom:32px;right:32px;z-index:999;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 20px;font-size:13px;color:var(--text);box-shadow:0 8px 32px rgba(0,0,0,.4);transform:translateY(80px);opacity:0;transition:all .3s cubic-bezier(.34,1.56,.64,1);pointer-events:none;max-width:320px}
+    #toast.show{transform:translateY(0);opacity:1}
+    #toast.toast-ok {border-color:rgba(10,245,176,.4);color:var(--green)}
+    #toast.toast-err{border-color:rgba(255,77,109,.4);color:var(--red)}
 
-    /* ── RESULT CARD ─────────────────────────────────────── */
-    .result-card {
-      background:var(--card);border:1px solid var(--border);
-      border-radius:16px;overflow:hidden;animation:fadeDown .45s ease both;
-      margin-bottom:20px;
-    }
-    .result-header {
-      display:flex;align-items:center;justify-content:space-between;
-      padding:14px 20px;border-bottom:1px solid var(--border);
-      background:rgba(0,200,255,.04);
-    }
-    .rh-left {
-      display:flex;align-items:center;gap:10px;
-      font-family:'DM Mono',monospace;font-size:11px;
-      color:var(--accent);letter-spacing:.08em;text-transform:uppercase;
-    }
-    .dot-live { width:8px;height:8px;background:var(--green);border-radius:50%;animation:pulse 1.5s infinite; }
-    @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.3;transform:scale(1.5)} }
-    .result-ts { font-size:11px;color:var(--muted);font-family:'DM Mono',monospace; }
-    .upsert-badge {
-      font-size:10px;font-family:'DM Mono',monospace;padding:3px 9px;border-radius:100px;
-      letter-spacing:.06em;text-transform:uppercase;
-    }
-    .badge-new    { background:rgba(10,245,176,.12);color:var(--green);border:1px solid rgba(10,245,176,.3); }
-    .badge-update { background:rgba(245,197,24,.10);color:var(--gold); border:1px solid rgba(245,197,24,.3); }
+    .footer{margin-top:60px;padding-top:24px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+    .footer-l{font-size:12px;color:var(--muted);font-family:'DM Mono',monospace}
+    .footer-r{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
 
-    .result-grid { display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); }
-    .result-item {
-      padding:20px 18px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);
-    }
-    .result-item:last-child { border-right:none; }
-    .ri-label { font-size:10px;font-family:'DM Mono',monospace;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:7px; }
-    .ri-value { font-size:19px;font-weight:700;color:#fff;font-family:'DM Serif Display',serif; }
-    .ri-value.up   { color:var(--green); }
-    .ri-value.down { color:var(--red);   }
-    .ri-value.flat { color:var(--gold);  }
-    .ri-sub { font-size:12px;color:var(--muted);margin-top:4px; }
-
-    /* ── TREND BADGE ─────────────────────────────────────── */
-    .trend-badge { display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:100px;font-size:11px;font-weight:600;letter-spacing:.05em; }
-    .bullish { background:rgba(10,245,176,.12);color:var(--green);border:1px solid rgba(10,245,176,.3); }
-    .bearish { background:rgba(255,77,109,.12); color:var(--red);  border:1px solid rgba(255,77,109,.3); }
-    .flat    { background:rgba(245,197,24,.12); color:var(--gold); border:1px solid rgba(245,197,24,.3); }
-
-    /* ── RECENT PRICES TABLE ─────────────────────────────── */
-    .prices-wrap {
-      background:var(--card);border:1px solid var(--border);border-radius:16px;
-      overflow:hidden;animation:fadeDown .45s ease both;margin-bottom:20px;
-    }
-    .section-header {
-      display:flex;align-items:center;justify-content:space-between;
-      padding:14px 20px;border-bottom:1px solid var(--border);
-    }
-    .section-title {
-      display:flex;align-items:center;gap:10px;
-      font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;
-    }
-    .prices-title { color:var(--gold); }
-    .history-title-color { color:var(--green); }
-    .section-count { color:var(--muted);font-size:10px;font-family:'DM Mono',monospace; }
-
-    /* ── HISTORY TABLE ───────────────────────────────────── */
-    .history-wrap {
-      background:var(--card);border:1px solid var(--border);border-radius:16px;
-      overflow:hidden;overflow-x:auto;animation:fadeDown .45s ease both;
-    }
-    table { width:100%;border-collapse:collapse;font-size:13px; }
-    thead { background:rgba(0,200,255,.03); }
-    th { padding:11px 14px;text-align:left;font-family:'DM Mono',monospace;font-size:10px;
-         letter-spacing:.1em;text-transform:uppercase;color:var(--muted);
-         border-bottom:1px solid var(--border);white-space:nowrap; }
-    td { padding:12px 14px;border-bottom:1px solid rgba(26,42,68,.5);white-space:nowrap; }
-    tr:last-child td { border-bottom:none; }
-    tbody tr { transition:background .15s; }
-    tbody tr:hover { background:rgba(0,200,255,.03); }
-    .empty-state { padding:40px;text-align:center;color:var(--muted);font-size:14px; }
-
-    /* ── ERROR / SKELETON ────────────────────────────────── */
-    .error-box { background:rgba(255,77,109,.07);border:1px solid rgba(255,77,109,.3);
-                 border-radius:12px;padding:14px 18px;color:var(--red);font-size:13px;
-                 animation:fadeDown .4s ease both; }
-    .skeleton-box { background:var(--card);border:1px solid var(--border);border-radius:16px;
-                    padding:36px;text-align:center;color:var(--muted);font-size:14px;
-                    animation:fadeDown .4s ease both; }
-    .sk-spin { width:26px;height:26px;border:3px solid var(--border);border-top-color:var(--accent);
-               border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 12px; }
-
-    /* ── TOAST NOTIFICATION ──────────────────────────────── */
-    #toast {
-      position:fixed;bottom:32px;right:32px;z-index:999;
-      background:var(--card);border:1px solid var(--border);border-radius:12px;
-      padding:12px 20px;font-size:13px;color:var(--text);
-      box-shadow:0 8px 32px rgba(0,0,0,.4);
-      transform:translateY(80px);opacity:0;
-      transition:all .3s cubic-bezier(.34,1.56,.64,1);
-      pointer-events:none;max-width:320px;
-    }
-    #toast.show { transform:translateY(0);opacity:1; }
-    #toast.toast-ok  { border-color:rgba(10,245,176,.4);color:var(--green); }
-    #toast.toast-err { border-color:rgba(255,77,109,.4);color:var(--red);   }
-
-    /* ── FOOTER ──────────────────────────────────────────── */
-    .footer { margin-top:60px;padding-top:24px;border-top:1px solid var(--border);
-              display:flex;align-items:center;justify-content:space-between;
-              flex-wrap:wrap;gap:12px; }
-    .footer-l { font-size:12px;color:var(--muted);font-family:'DM Mono',monospace; }
-    .footer-r { display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted); }
-
-    @keyframes fadeDown { from{opacity:0;transform:translateY(-14px)} to{opacity:1;transform:translateY(0)} }
+    @keyframes fd{from{opacity:0;transform:translateY(-14px)}to{opacity:1;transform:translateY(0)}}
   </style>
 </head>
 <body>
-
 <div class="blob blob-1"></div>
 <div class="blob blob-2"></div>
 <div id="toast"></div>
 
 <div class="wrapper">
 
+  <!-- HEADER -->
   <div class="badge">✦ Selamat Datang di Project Kelompok 2</div>
-
-  <h1 class="title">
-    Prediksi Harga Saham<br/>
-    <em>PT Telkom Indonesia (Persero) Tbk</em><br/>
-    Menggunakan Algoritma Recurrent Neural Network (RNN)
-  </h1>
-
-  <p class="subtitle">
-    Sistem inferensi berbasis <strong style="color:var(--text)">SimpleRNN</strong>
-    untuk memprediksi harga penutupan <span class="ticker-chip">TLKM.JK</span>
-    pada hari perdagangan berikutnya.
-    Data historis sejak 2008 &mdash; <em>inference only, no retraining.</em>
-  </p>
+  <h1 class="title">Prediksi Harga Saham<br/><em>PT Telkom Indonesia (Persero) Tbk</em><br/>Menggunakan Algoritma Recurrent Neural Network (RNN)</h1>
+  <p class="subtitle">Sistem inferensi berbasis <strong style="color:var(--text)">SimpleRNN</strong> untuk memprediksi harga penutupan <span class="ticker-chip">TLKM.JK</span> pada hari perdagangan berikutnya. Data historis sejak 2008 &mdash; <em>inference only, no retraining.</em></p>
 
   <div class="divider"></div>
 
-  <!-- ── ACTION CARDS (3 kolom) ──────────────────────────────────── -->
-  <div class="actions">
+  <!-- ════════════════════════════════════════════════
+       CHART SECTION
+       ════════════════════════════════════════════════ -->
+  <div class="chart-section">
+    <div class="chart-top">
 
-    <!-- Card 1: Prediksi -->
+      <!-- Ticker info -->
+      <div>
+        <div class="ct-label">IDX · Saham Telekomunikasi</div>
+        <div class="ct-name">
+          TLKM.JK
+          <span class="ct-price" id="ct-price">—</span>
+          <span class="ct-badge flat" id="ct-chg">—</span>
+        </div>
+        <div class="ct-meta">
+          <span>H &nbsp;<b id="ct-high">—</b></span>
+          <span>L &nbsp;<b id="ct-low">—</b></span>
+          <span id="ct-date" style="opacity:.7">—</span>
+        </div>
+      </div>
+
+      <!-- Range selector -->
+      <div class="range-row" id="range-row">
+        <button class="rb"        data-r="1D"  onclick="loadChart('1D')">1D</button>
+        <button class="rb"        data-r="5D"  onclick="loadChart('5D')">5D</button>
+        <button class="rb active" data-r="1M"  onclick="loadChart('1M')">1M</button>
+        <button class="rb"        data-r="YTD" onclick="loadChart('YTD')">YTD</button>
+        <button class="rb"        data-r="1Y"  onclick="loadChart('1Y')">1Y</button>
+        <button class="rb"        data-r="3Y"  onclick="loadChart('3Y')">3Y</button>
+      </div>
+
+    </div>
+
+    <!-- Chart -->
+    <div class="chart-wrap" id="chart-wrap">
+      <div class="chart-ov" id="chart-ov">
+        <div class="sk"></div>
+        <span id="chart-ov-msg">Memuat data chart...</span>
+      </div>
+      <div id="apex-chart"></div>
+    </div>
+    <div class="zoom-hint">🖱 Scroll to zoom &nbsp;·&nbsp; Drag to pan</div>
+
+  </div>
+
+  <!-- ACTION CARDS -->
+  <div class="actions">
     <div class="action-card primary">
       <div class="card-icon">📈</div>
       <div class="card-label">Inference Engine</div>
       <div class="card-title">Jalankan Prediksi</div>
-      <div class="card-desc">
-        Prediksi harga penutupan TLKM untuk hari perdagangan berikutnya.
-        Satu hari = satu record di database.
-      </div>
+      <div class="card-desc">Prediksi harga penutupan TLKM untuk hari perdagangan berikutnya. Satu hari = satu record di database.</div>
       <button class="btn btn-primary" id="btn-predict" onclick="runPrediction()">
         <span id="btn-predict-text">Klik untuk Melihat Hasil Prediksi</span>
         <div class="spinner" id="sp-predict"></div>
       </button>
     </div>
-
-    <!-- Card 2: Riwayat -->
     <div class="action-card secondary">
       <div class="card-icon">🗂️</div>
       <div class="card-label">SQLite Database</div>
       <div class="card-title">Lihat Riwayat Prediksi</div>
-      <div class="card-desc">
-        Tampilkan riwayat prediksi dari database lokal.
-        Setiap baris dapat dihapus secara individual.
-      </div>
+      <div class="card-desc">Tampilkan riwayat prediksi dari database lokal. Setiap baris dapat dihapus secara individual.</div>
       <button class="btn btn-secondary" id="btn-history" onclick="loadHistory()">
         <span id="btn-history-text">Lihat Riwayat Prediksi</span>
         <div class="spinner" id="sp-history"></div>
       </button>
     </div>
-
-    <!-- Card 3: Harga Terakhir -->
     <div class="action-card tertiary">
       <div class="card-icon">📊</div>
       <div class="card-label">Data Historis</div>
       <div class="card-title">10 Harga Saham Terakhir</div>
-      <div class="card-desc">
-        Tampilkan 10 data harga OHLCV terakhir dari dataset
-        sebagai referensi kondisi pasar terkini.
-      </div>
+      <div class="card-desc">Tampilkan 10 data harga OHLCV terakhir dari dataset sebagai referensi kondisi pasar terkini.</div>
       <button class="btn btn-tertiary" id="btn-prices" onclick="loadRecentPrices()">
         <span id="btn-prices-text">Lihat Harga Terakhir</span>
         <div class="spinner" id="sp-prices"></div>
       </button>
     </div>
-
   </div>
 
-  <!-- ── OUTPUT AREA ──────────────────────────────────────────────── -->
   <div id="result"></div>
 
   <div class="footer">
-    <div class="footer-l">Kelompok 2 &nbsp;·&nbsp; SimpleRNN &nbsp;·&nbsp; Inference Only &nbsp;·&nbsp; v2.5.0</div>
-    <div class="footer-r">
-      <span class="ticker-chip">TLKM.JK</span>
-      <span>Bursa Efek Indonesia</span>
-    </div>
+    <div class="footer-l">Kelompok 2 &nbsp;·&nbsp; SimpleRNN &nbsp;·&nbsp; Inference Only &nbsp;·&nbsp; v2.7.0</div>
+    <div class="footer-r"><span class="ticker-chip">TLKM.JK</span><span>Bursa Efek Indonesia</span></div>
   </div>
 
 </div>
 
-<!-- ════════════════════════════════════════════════════════════════
+<!-- ══════════════════════════════════════════════════════════
      JAVASCRIPT
-     ════════════════════════════════════════════════════════════════ -->
+     ══════════════════════════════════════════════════════════ -->
 <script>
 "use strict";
 
-/* ── FORMAT HELPERS ──────────────────────────────────────────────── */
-function fmtRp(v) {
-  return 'Rp ' + Number(v).toLocaleString('id-ID', {minimumFractionDigits:2, maximumFractionDigits:2});
+/* ── FORMAT HELPERS ──────────────────────────────── */
+const fmtRp  = v => 'Rp ' + Number(v).toLocaleString('id-ID',{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtPct = v => (v>=0?'+':'')+Number(v).toFixed(4)+'%';
+const fmtChg = v => (v>=0?'+':'-')+fmtRp(Math.abs(v));
+const fmtVol = v => Number(v).toLocaleString('id-ID');
+const cc     = v => v>0?'up':v<0?'down':'flat';
+const ccSt   = v => v>0?'color:var(--green)':v<0?'color:var(--red)':'color:var(--gold)';
+const trendBadge = t => {
+  const m={bullish:['bullish','▲','BULLISH'],bearish:['bearish','▼','BEARISH'],flat:['flat','→','FLAT']};
+  const [cls,icon,lbl]=m[t]||m.flat;
+  return `<span class="trend-badge ${cls}">${icon} ${lbl}</span>`;
+};
+
+/* ── TOAST ──────────────────────────────────────── */
+let _tt=null;
+function showToast(msg,type='ok'){
+  const el=document.getElementById('toast');
+  el.textContent=msg;el.className=`show toast-${type}`;
+  clearTimeout(_tt);_tt=setTimeout(()=>{el.className=''},3000);
 }
-function fmtPct(v) {
-  return (v >= 0 ? '+' : '') + Number(v).toFixed(4) + '%';
+
+/* ── BUTTON STATE ───────────────────────────────── */
+function setBtnState(b,s,t,loading,norm){
+  document.getElementById(b).disabled=loading;
+  document.getElementById(s).style.display=loading?'block':'none';
+  document.getElementById(t).textContent=loading?'Memproses...':norm;
 }
-function fmtChange(v) {
-  return (v >= 0 ? '+' : '-') + fmtRp(Math.abs(v));
+function showLoading(m){document.getElementById('result').innerHTML=`<div class="skeleton-box"><div class="sk-spin"></div>${m}</div>`}
+function showError(m){document.getElementById('result').innerHTML=`<div class="error-box">⚠ ${m}</div>`}
+
+
+/* ════════════════════════════════════════════════════════════
+   CHART — ApexCharts Candlestick + Volume (single panel)
+   Menggunakan categorical axis → NO gaps weekend/libur
+   ════════════════════════════════════════════════════════════ */
+let apexChart   = null;
+let _chartRange = '1M';
+
+// Simpan data terakhir untuk zoom reset
+let _lastLabels  = [];
+let _lastCandles = [];
+let _lastVolumes = [];
+
+// Zoom state
+let _zoomStart = 0;   // index
+let _zoomEnd   = 0;   // index
+
+function buildApexSeries(labels, candles, volumes) {
+  // Candlestick series: y=[o,h,l,c]
+  const candleSeries = candles.map((c,i) => ({
+    x: labels[i],
+    y: [c.o, c.h, c.l, c.c]
+  }));
+
+  // Volume series: single color per bar via plotOptions distributed
+  const volSeries = volumes.map((v,i) => ({
+    x: labels[i],
+    y: v.y,
+    fillColor: v.color,
+    strokeColor: v.color,
+  }));
+
+  return { candleSeries, volSeries };
 }
-function fmtVol(v) {
-  return Number(v).toLocaleString('id-ID');
-}
-function cc(v) { return v > 0 ? 'up' : v < 0 ? 'down' : 'flat'; }
-function ccStyle(v) {
-  return v > 0 ? 'color:var(--green)' : v < 0 ? 'color:var(--red)' : 'color:var(--gold)';
-}
-function trendBadge(trend) {
-  const cfg = {
-    bullish: ['bullish','▲','BULLISH'],
-    bearish: ['bearish','▼','BEARISH'],
-    flat:    ['flat',   '→','FLAT'   ],
+
+function createChart(labels, candles, volumes) {
+  const { candleSeries, volSeries } = buildApexSeries(labels, candles, volumes);
+  const n = labels.length;
+
+  // Show last ~60 candles by default (zoom window)
+  const defStart = Math.max(0, n - 60);
+  const defEnd   = n - 1;
+  _zoomStart = defStart;
+  _zoomEnd   = defEnd;
+
+  const visibleLabels = labels.slice(defStart, defEnd + 1);
+
+  const options = {
+    chart: {
+      type: 'candlestick',
+      height: 420,
+      background: 'transparent',
+      fontFamily: "'DM Mono', monospace",
+      animations: { enabled: true, easing: 'easeinout', speed: 500 },
+      toolbar: {
+        show: true,
+        tools: {
+          download: true,
+          selection: true,
+          zoom: true,
+          zoomin: true,
+          zoomout: true,
+          pan: true,
+          reset: true,
+        },
+        autoSelected: 'pan',
+      },
+      zoom: {
+        enabled: true,
+        type: 'x',
+      },
+      pan: {
+        enabled: true,
+        type: 'x',
+      },
+      events: {
+        // Update header tooltip saat hover
+        mouseMove(e, ctx, cfg) {
+          const idx = cfg?.dataPointIndex;
+          if (idx == null || idx < 0) return;
+          const realIdx = _zoomStart + idx;
+          if (!_lastCandles[realIdx]) return;
+          updateHeaderHover(realIdx);
+        },
+        mouseLeave() {
+          // Restore latest
+          updateHeaderFromLatest();
+        },
+      },
+    },
+
+    // Satu series utama: candlestick
+    series: [{
+      name: 'OHLC',
+      type: 'candlestick',
+      data: candleSeries.slice(defStart, defEnd + 1),
+    }, {
+      name: 'Volume',
+      type: 'bar',
+      data: volSeries.slice(defStart, defEnd + 1),
+    }],
+
+    plotOptions: {
+      candlestick: {
+        colors: { upward: '#0af5b0', downward: '#ff4d6d' },
+        wick: { useFillColor: true },
+      },
+      bar: {
+        columnWidth: '80%',
+      },
+    },
+
+    // Dual y-axis: kiri untuk harga, kanan/tersembunyi untuk volume
+    yaxis: [
+      {
+        seriesName: 'OHLC',
+        labels: {
+          style: { colors: '#6b82a8', fontSize: '10px' },
+          formatter: v => 'Rp ' + Number(v).toLocaleString('id-ID'),
+        },
+        tooltip: { enabled: true },
+        axisBorder: { show: false },
+      },
+      {
+        seriesName: 'Volume',
+        opposite: true,
+        show: false,   // sembunyikan label volume di kanan
+        max: v => v * 5,  // dorong volume bar ke bawah (hanya 20% tinggi)
+      },
+    ],
+
+    xaxis: {
+      type: 'category',
+      categories: visibleLabels,
+      tickAmount: 8,
+      labels: {
+        rotate: 0,
+        style: { colors: '#6b82a8', fontSize: '10px' },
+        // Tampilkan hanya setiap beberapa label agar tidak tumpang tindih
+        formatter(val) { return val; },
+      },
+      axisBorder: { color: '#1a2a44' },
+      axisTicks:  { color: '#1a2a44' },
+      crosshairs: { stroke: { color: '#00c8ff', width: 1, dashArray: 3 } },
+      tooltip: { enabled: false },
+    },
+
+    grid: {
+      borderColor: '#1a2a44',
+      strokeDashArray: 3,
+      xaxis: { lines: { show: false } },
+    },
+
+    dataLabels: { enabled: false },
+    legend:     { show: false },
+
+    theme: { mode: 'dark' },
+
+    tooltip: {
+      theme: 'dark',
+      shared: true,
+      custom({ seriesIndex, dataPointIndex, w }) {
+        // Hanya render tooltip untuk candlestick (series 0)
+        if (seriesIndex === 1) return '';
+        const d = w.globals.initialSeries[0].data[dataPointIndex];
+        if (!d) return '';
+        const [o, h, lo, c] = d.y;
+        const chg = c - o;
+        const chgColor = chg >= 0 ? '#0af5b0' : '#ff4d6d';
+        const fRp = n => 'Rp ' + Number(n).toLocaleString('id-ID', {minimumFractionDigits:2});
+        const vol = w.globals.initialSeries[1]?.data?.[dataPointIndex]?.y ?? 0;
+        return `
+          <div style="padding:10px 14px;background:#0d1627;border:1px solid #1a2a44;border-radius:8px;font-size:11px;line-height:2;min-width:160px">
+            <div style="color:#6b82a8;font-size:10px;margin-bottom:3px">${d.x}</div>
+            <div>O &nbsp;<span style="color:#e8f0fe">${fRp(o)}</span></div>
+            <div>H &nbsp;<span style="color:#0af5b0">${fRp(h)}</span></div>
+            <div>L &nbsp;<span style="color:#ff4d6d">${fRp(lo)}</span></div>
+            <div>C &nbsp;<span style="color:#00c8ff;font-weight:700">${fRp(c)}</span></div>
+            <div style="color:${chgColor}">${chg>=0?'▲':'▼'} ${fRp(Math.abs(chg))}</div>
+            <div style="color:#6b82a8;font-size:10px">Vol ${fmtVol(vol)}</div>
+          </div>`;
+      },
+    },
+
+    stroke: {
+      show: true,
+      curve: 'straight',
+      width: [1, 1],
+    },
+
+    fill: { opacity: [1, 0.85] },
   };
-  const [cls, icon, label] = cfg[trend] || cfg.flat;
-  return `<span class="trend-badge ${cls}">${icon} ${label}</span>`;
+
+  if (apexChart) {
+    apexChart.destroy();
+    apexChart = null;
+  }
+
+  apexChart = new ApexCharts(document.getElementById('apex-chart'), options);
+  apexChart.render();
+
+  // ── Scroll-to-zoom via wheel event ───────────────────────────
+  const chartEl = document.getElementById('chart-wrap');
+  chartEl.removeEventListener('wheel', _wheelHandler, { passive: false });
+  chartEl.addEventListener('wheel', _wheelHandler, { passive: false });
 }
 
-/* ── TOAST ───────────────────────────────────────────────────────── */
-let _toastTimer = null;
-function showToast(msg, type = 'ok') {
-  const el = document.getElementById('toast');
-  el.textContent = msg;
-  el.className = `show toast-${type}`;
-  clearTimeout(_toastTimer);
-  _toastTimer = setTimeout(() => { el.className = ''; }, 3000);
+function _wheelHandler(e) {
+  e.preventDefault();
+  if (!apexChart || !_lastLabels.length) return;
+
+  const n       = _lastLabels.length;
+  const visible = _zoomEnd - _zoomStart + 1;
+  const delta   = e.deltaY < 0 ? -1 : 1;  // negatif = zoom in, positif = zoom out
+
+  // Zoom factor: scroll ke atas = zoom in (kurangi window), ke bawah = zoom out (perlebar)
+  const step    = Math.max(1, Math.round(visible * 0.1));
+  let newStart  = _zoomStart + delta * step;
+  let newEnd    = _zoomEnd   - delta * step;
+
+  // Batas minimum: minimal 5 candle terlihat
+  if (newEnd - newStart < 4) {
+    const mid = Math.round((_zoomStart + _zoomEnd) / 2);
+    newStart  = Math.max(0, mid - 2);
+    newEnd    = Math.min(n - 1, mid + 2);
+  }
+
+  // Batas maksimum: tidak melebihi data
+  newStart = Math.max(0, newStart);
+  newEnd   = Math.min(n - 1, newEnd);
+
+  if (newStart === _zoomStart && newEnd === _zoomEnd) return;
+
+  _zoomStart = newStart;
+  _zoomEnd   = newEnd;
+
+  applyZoom();
 }
 
-/* ── BUTTON STATE ────────────────────────────────────────────────── */
-function setBtnState(btnId, spId, textId, loading, normalText) {
-  document.getElementById(btnId).disabled     = loading;
-  document.getElementById(spId).style.display = loading ? 'block' : 'none';
-  document.getElementById(textId).textContent = loading ? 'Memproses...' : normalText;
+function applyZoom() {
+  if (!apexChart || !_lastLabels.length) return;
+  const sliceLabels  = _lastLabels.slice(_zoomStart, _zoomEnd + 1);
+  const sliceCandles = _lastCandles.slice(_zoomStart, _zoomEnd + 1).map((c,i) => ({
+    x: sliceLabels[i], y:[c.o,c.h,c.l,c.c]
+  }));
+  const sliceVol = _lastVolumes.slice(_zoomStart, _zoomEnd + 1).map((v,i) => ({
+    x: sliceLabels[i], y: v.y, fillColor: v.color, strokeColor: v.color,
+  }));
+
+  apexChart.updateOptions({ xaxis: { categories: sliceLabels } }, false, false);
+  apexChart.updateSeries([
+    { name: 'OHLC',   type: 'candlestick', data: sliceCandles },
+    { name: 'Volume', type: 'bar',         data: sliceVol },
+  ], false);
 }
 
-/* ── LOADING / ERROR ─────────────────────────────────────────────── */
-function showLoading(msg) {
-  document.getElementById('result').innerHTML =
-    `<div class="skeleton-box"><div class="sk-spin"></div>${msg}</div>`;
+/* Header hover update */
+function updateHeaderHover(idx) {
+  const c = _lastCandles[idx];
+  if (!c) return;
+  document.getElementById('ct-price').textContent = fmtRp(c.c);
+  const chg = c.c - c.o;
+  const el  = document.getElementById('ct-chg');
+  el.textContent = `${chg>=0?'+':''}${fmtRp(chg).replace('Rp ','')}`;
+  el.className   = 'ct-badge ' + cc(chg);
 }
-function showError(msg) {
-  document.getElementById('result').innerHTML =
-    `<div class="error-box">⚠ ${msg}</div>`;
+
+function updateHeaderFromLatest() {
+  if (!_lastCandles.length) return;
+  const last = _lastCandles[_lastCandles.length - 1];
+  const first = _lastCandles[0];
+  const chg = last.c - first.c;
+  const pct = first.c ? (chg / first.c * 100) : 0;
+  document.getElementById('ct-price').textContent = fmtRp(last.c);
+  const el = document.getElementById('ct-chg');
+  el.textContent = `${chg>=0?'+':''}${fmtRp(Math.abs(chg)).replace('Rp ','')} (${chg>=0?'+':''}${pct.toFixed(2)}%)`;
+  el.className   = 'ct-badge ' + cc(chg);
 }
 
-/* ════════════════════════════════════════════════════════════════════
-   runPrediction()
-   ════════════════════════════════════════════════════════════════════ */
-async function runPrediction() {
-  setBtnState('btn-predict','sp-predict','btn-predict-text', true, 'Klik untuk Melihat Hasil Prediksi');
-  showLoading('Menjalankan inferensi model SimpleRNN...');
-
-  try {
-    const res  = await fetch('/predict', {method:'GET', headers:{'Accept':'application/json'}});
-    const data = await res.json();
-    if (!res.ok) throw new Error(data?.detail?.error || data?.detail || `HTTP ${res.status}`);
-
-    // Badge: INSERT baru vs UPDATE hari ini
-    const upsertBadge = data.is_new_record
-      ? `<span class="upsert-badge badge-new">✦ Record Baru</span>`
-      : `<span class="upsert-badge badge-update">↻ Diperbarui</span>`;
-
-    document.getElementById('result').innerHTML = `
-      <div class="result-card">
-        <div class="result-header">
-          <div class="rh-left">
-            <div class="dot-live"></div>
-            HASIL PREDIKSI TERBARU
-            &nbsp;${upsertBadge}
-          </div>
-          <div class="result-ts">${data.timestamp}</div>
-        </div>
-        <div class="result-grid">
-          <div class="result-item">
-            <div class="ri-label">Tanggal Prediksi</div>
-            <div class="ri-value" style="font-size:17px">${data.prediction_date}</div>
-            <div class="ri-sub">${data.prediction_day}</div>
-          </div>
-          <div class="result-item">
-            <div class="ri-label">Harga Prediksi</div>
-            <div class="ri-value up">${fmtRp(data.predicted_price)}</div>
-            <div class="ri-sub">Close price (IDR)</div>
-          </div>
-          <div class="result-item">
-            <div class="ri-label">Harga Terakhir</div>
-            <div class="ri-value">${fmtRp(data.last_actual_price)}</div>
-            <div class="ri-sub">${data.last_actual_date}</div>
-          </div>
-          <div class="result-item">
-            <div class="ri-label">Perubahan</div>
-            <div class="ri-value ${cc(data.price_change)}">${fmtChange(data.price_change)}</div>
-            <div class="ri-sub" style="${ccStyle(data.price_change_pct)}">${fmtPct(data.price_change_pct)}</div>
-          </div>
-          <div class="result-item" style="border-right:none">
-            <div class="ri-label">Tren Prediksi</div>
-            <div style="margin-top:6px">${trendBadge(data.trend)}</div>
-            <div class="ri-sub" style="margin-top:8px">ID #${data.saved_id}</div>
-          </div>
-        </div>
-      </div>
-    `;
-
-    showToast(data.is_new_record ? '✓ Prediksi baru disimpan' : '↻ Prediksi hari ini diperbarui', 'ok');
-    document.getElementById('result').scrollIntoView({behavior:'smooth', block:'nearest'});
-
-  } catch (err) {
-    showError('Prediksi gagal: ' + err.message);
-    showToast('Prediksi gagal', 'err');
-  } finally {
-    setBtnState('btn-predict','sp-predict','btn-predict-text', false, 'Klik untuk Melihat Hasil Prediksi');
+function setChartOv(show, msg='', isErr=false) {
+  const el = document.getElementById('chart-ov');
+  if (show) {
+    el.classList.remove('hidden','err-ov');
+    if (isErr) el.classList.add('err-ov');
+    document.getElementById('chart-ov-msg').textContent = msg;
+  } else {
+    el.classList.add('hidden');
   }
 }
 
-/* ════════════════════════════════════════════════════════════════════
-   loadHistory()  — dengan tombol hapus per baris
-   ════════════════════════════════════════════════════════════════════ */
-async function loadHistory() {
-  setBtnState('btn-history','sp-history','btn-history-text', true, 'Lihat Riwayat Prediksi');
-  showLoading('Mengambil riwayat dari database SQLite...');
+function updateChartHeader(latest) {
+  document.getElementById('ct-price').textContent = fmtRp(latest.close);
+  const chg = latest.change; const pct = latest.change_pct;
+  const el  = document.getElementById('ct-chg');
+  el.textContent = `${chg>=0?'+':''}${fmtRp(Math.abs(chg)).replace('Rp ','')} (${chg>=0?'+':''}${pct.toFixed(2)}%)`;
+  el.className   = 'ct-badge ' + cc(chg);
+  document.getElementById('ct-high').textContent = fmtRp(latest.high);
+  document.getElementById('ct-low').textContent  = fmtRp(latest.low);
+  document.getElementById('ct-date').textContent = latest.date;
+}
+
+async function loadChart(range) {
+  _chartRange = range;
+  document.querySelectorAll('.rb').forEach(b => b.classList.toggle('active', b.dataset.r === range));
+  setChartOv(true, `Memuat data ${range}...`);
 
   try {
-    const res  = await fetch('/history', {method:'GET', headers:{'Accept':'application/json'}});
+    const res  = await fetch(`/chart-data?range=${range}`, { headers: {'Accept':'application/json'} });
     const data = await res.json();
-    if (!res.ok) throw new Error(data?.detail?.error || data?.detail || `HTTP ${res.status}`);
+    if (!res.ok) throw new Error(data?.detail?.error || `HTTP ${res.status}`);
 
-    let tbody;
-    if (!data.history || data.history.length === 0) {
-      tbody = `<tr><td colspan="9" class="empty-state">
-        Belum ada riwayat.<br/>
-        <span style="font-size:12px;opacity:.6">Klik "Jalankan Prediksi" terlebih dahulu.</span>
-      </td></tr>`;
-    } else {
-      tbody = data.history.map(row => `
+    // Simpan data lengkap untuk zoom
+    _lastLabels  = data.labels;
+    _lastCandles = data.candles;
+    _lastVolumes = data.volumes;
+
+    createChart(data.labels, data.candles, data.volumes);
+    updateChartHeader(data.latest);
+    setChartOv(false);
+
+  } catch (err) {
+    setChartOv(true, `Gagal: ${err.message}`, true);
+    showToast('Gagal load chart', 'err');
+  }
+}
+
+
+/* ════════════════════════════════════════════════════════════
+   PREDICTION
+   ════════════════════════════════════════════════════════════ */
+async function runPrediction() {
+  setBtnState('btn-predict','sp-predict','btn-predict-text',true,'Klik untuk Melihat Hasil Prediksi');
+  showLoading('Menjalankan inferensi model SimpleRNN...');
+  try {
+    const res=await fetch('/predict',{headers:{'Accept':'application/json'}});
+    const data=await res.json();
+    if(!res.ok) throw new Error(data?.detail?.error||data?.detail||`HTTP ${res.status}`);
+    const upBadge=data.is_new_record
+      ?`<span class="upsert-badge badge-new">✦ Record Baru</span>`
+      :`<span class="upsert-badge badge-update">↻ Diperbarui</span>`;
+    document.getElementById('result').innerHTML=`
+      <div class="result-card">
+        <div class="result-header">
+          <div class="rh-left"><div class="dot-live"></div> HASIL PREDIKSI TERBARU &nbsp;${upBadge}</div>
+          <div class="result-ts">${data.timestamp}</div>
+        </div>
+        <div class="result-grid">
+          <div class="result-item"><div class="ri-label">Tanggal Prediksi</div><div class="ri-value" style="font-size:17px">${data.prediction_date}</div><div class="ri-sub">${data.prediction_day}</div></div>
+          <div class="result-item"><div class="ri-label">Harga Prediksi</div><div class="ri-value up">${fmtRp(data.predicted_price)}</div><div class="ri-sub">Close price (IDR)</div></div>
+          <div class="result-item"><div class="ri-label">Harga Terakhir</div><div class="ri-value">${fmtRp(data.last_actual_price)}</div><div class="ri-sub">${data.last_actual_date}</div></div>
+          <div class="result-item"><div class="ri-label">Perubahan</div><div class="ri-value ${cc(data.price_change)}">${fmtChg(data.price_change)}</div><div class="ri-sub" style="${ccSt(data.price_change_pct)}">${fmtPct(data.price_change_pct)}</div></div>
+          <div class="result-item" style="border-right:none"><div class="ri-label">Tren Prediksi</div><div style="margin-top:6px">${trendBadge(data.trend)}</div><div class="ri-sub" style="margin-top:8px">ID #${data.saved_id}</div></div>
+        </div>
+      </div>`;
+    showToast(data.is_new_record?'✓ Prediksi baru disimpan':'↻ Prediksi hari ini diperbarui','ok');
+    document.getElementById('result').scrollIntoView({behavior:'smooth',block:'nearest'});
+  } catch(err) {
+    showError('Prediksi gagal: '+err.message); showToast('Prediksi gagal','err');
+  } finally {
+    setBtnState('btn-predict','sp-predict','btn-predict-text',false,'Klik untuk Melihat Hasil Prediksi');
+  }
+}
+
+/* ════════════════════════════════════════════════════════════
+   HISTORY + DELETE
+   ════════════════════════════════════════════════════════════ */
+async function loadHistory() {
+  setBtnState('btn-history','sp-history','btn-history-text',true,'Lihat Riwayat Prediksi');
+  showLoading('Mengambil riwayat dari database SQLite...');
+  try {
+    const res=await fetch('/history',{headers:{'Accept':'application/json'}});
+    const data=await res.json();
+    if(!res.ok) throw new Error(data?.detail?.error||`HTTP ${res.status}`);
+    const tbody=(!data.history||!data.history.length)
+      ?`<tr><td colspan="9" class="empty-state">Belum ada riwayat.</td></tr>`
+      :data.history.map(row=>`
         <tr id="row-${row.id}">
           <td style="color:var(--muted);font-family:'DM Mono',monospace;font-size:11px">${row.id}</td>
           <td style="font-family:'DM Mono',monospace;font-size:12px;font-weight:600">${row.prediction_date}</td>
           <td style="font-weight:600;color:var(--accent)">${fmtRp(row.predicted_price)}</td>
           <td style="color:var(--muted)">${fmtRp(row.last_actual_price)}</td>
-          <td style="${ccStyle(row.price_change)};font-weight:500">${fmtChange(row.price_change)}</td>
-          <td style="${ccStyle(row.price_change_pct)}">${fmtPct(row.price_change_pct)}</td>
+          <td style="${ccSt(row.price_change)};font-weight:500">${fmtChg(row.price_change)}</td>
+          <td style="${ccSt(row.price_change_pct)}">${fmtPct(row.price_change_pct)}</td>
           <td>${trendBadge(row.trend)}</td>
           <td style="color:var(--muted);font-size:11px;font-family:'DM Mono',monospace">${row.timestamp}</td>
-          <td>
-            <button class="btn btn-danger" onclick="deleteRecord(${row.id})">🗑 Hapus</button>
-          </td>
-        </tr>
-      `).join('');
-    }
-
-    document.getElementById('result').innerHTML = `
-      <div class="history-wrap">
+          <td><button class="btn btn-danger" onclick="deleteRecord(${row.id})">🗑 Hapus</button></td>
+        </tr>`).join('');
+    document.getElementById('result').innerHTML=`
+      <div class="table-wrap">
         <div class="section-header">
-          <div class="section-title history-title-color">
-            🗂️ &nbsp; Riwayat Prediksi
-          </div>
+          <div class="section-title history-title-color">🗂️ &nbsp; Riwayat Prediksi</div>
           <span class="section-count" id="history-count">${data.total} record</span>
         </div>
-        <div style="overflow-x:auto">
-          <table>
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Tgl Prediksi</th>
-                <th>Harga Prediksi</th>
-                <th>Harga Terakhir</th>
-                <th>Perubahan</th>
-                <th>%</th>
-                <th>Tren</th>
-                <th>Timestamp</th>
-                <th>Aksi</th>
-              </tr>
-            </thead>
-            <tbody id="history-tbody">${tbody}</tbody>
-          </table>
-        </div>
-      </div>
-    `;
-
-    document.getElementById('result').scrollIntoView({behavior:'smooth', block:'nearest'});
-
-  } catch (err) {
-    showError('Gagal memuat riwayat: ' + err.message);
-    showToast('Gagal memuat riwayat', 'err');
+        <div style="overflow-x:auto"><table><thead><tr>
+          <th>#</th><th>Tgl Prediksi</th><th>Harga Prediksi</th><th>Harga Terakhir</th>
+          <th>Perubahan</th><th>%</th><th>Tren</th><th>Timestamp</th><th>Aksi</th>
+        </tr></thead><tbody id="history-tbody">${tbody}</tbody></table></div>
+      </div>`;
+    document.getElementById('result').scrollIntoView({behavior:'smooth',block:'nearest'});
+  } catch(err) {
+    showError('Gagal memuat riwayat: '+err.message); showToast('Gagal memuat riwayat','err');
   } finally {
-    setBtnState('btn-history','sp-history','btn-history-text', false, 'Lihat Riwayat Prediksi');
+    setBtnState('btn-history','sp-history','btn-history-text',false,'Lihat Riwayat Prediksi');
   }
 }
 
-/* ════════════════════════════════════════════════════════════════════
-   deleteRecord(id) — hapus satu baris tanpa reload halaman
-   ════════════════════════════════════════════════════════════════════ */
 async function deleteRecord(id) {
-  if (!confirm(`Hapus prediksi #${id}?`)) return;
-
+  if(!confirm(`Hapus prediksi #${id}?`)) return;
   try {
-    const res  = await fetch(`/delete/${id}`, {method:'DELETE', headers:{'Accept':'application/json'}});
-    const data = await res.json();
-    if (!res.ok) throw new Error(data?.detail?.error || `HTTP ${res.status}`);
-
-    // Hapus baris dari tabel tanpa reload
-    const row = document.getElementById(`row-${id}`);
-    if (row) {
-      row.style.transition = 'opacity .3s, transform .3s';
-      row.style.opacity    = '0';
-      row.style.transform  = 'translateX(20px)';
-      setTimeout(() => {
+    const res=await fetch(`/delete/${id}`,{method:'DELETE',headers:{'Accept':'application/json'}});
+    const data=await res.json();
+    if(!res.ok) throw new Error(data?.detail?.error||`HTTP ${res.status}`);
+    const row=document.getElementById(`row-${id}`);
+    if(row){
+      row.style.transition='opacity .3s,transform .3s';row.style.opacity='0';row.style.transform='translateX(20px)';
+      setTimeout(()=>{
         row.remove();
-        // Update counter
-        const countEl = document.getElementById('history-count');
-        if (countEl) {
-          const current = parseInt(countEl.textContent) || 0;
-          countEl.textContent = Math.max(0, current - 1) + ' record';
-        }
-        // Cek jika tabel kosong
-        const tbody = document.getElementById('history-tbody');
-        if (tbody && tbody.children.length === 0) {
-          tbody.innerHTML = `<tr><td colspan="9" class="empty-state">
-            Belum ada riwayat.
-          </td></tr>`;
-        }
-      }, 300);
+        const c=document.getElementById('history-count');
+        if(c) c.textContent=Math.max(0,(parseInt(c.textContent)||0)-1)+' record';
+        const tb=document.getElementById('history-tbody');
+        if(tb&&!tb.children.length) tb.innerHTML=`<tr><td colspan="9" class="empty-state">Belum ada riwayat.</td></tr>`;
+      },300);
     }
-
-    showToast(`✓ Prediksi #${id} dihapus`, 'ok');
-
-  } catch (err) {
-    showToast(`Gagal hapus #${id}: ${err.message}`, 'err');
-  }
+    showToast(`✓ Prediksi #${id} dihapus`,'ok');
+  } catch(err){ showToast(`Gagal hapus #${id}: ${err.message}`,'err'); }
 }
 
-/* ════════════════════════════════════════════════════════════════════
-   loadRecentPrices() — 10 harga saham terakhir
-   ════════════════════════════════════════════════════════════════════ */
+/* ════════════════════════════════════════════════════════════
+   RECENT PRICES
+   ════════════════════════════════════════════════════════════ */
 async function loadRecentPrices() {
-  setBtnState('btn-prices','sp-prices','btn-prices-text', true, 'Lihat Harga Terakhir');
+  setBtnState('btn-prices','sp-prices','btn-prices-text',true,'Lihat Harga Terakhir');
   showLoading('Mengambil 10 harga saham terakhir...');
-
   try {
-    const res  = await fetch('/recent-prices?n=10', {method:'GET', headers:{'Accept':'application/json'}});
-    const data = await res.json();
-    if (!res.ok) throw new Error(data?.detail?.error || `HTTP ${res.status}`);
-
-    let tbody;
-    if (!data.prices || data.prices.length === 0) {
-      tbody = `<tr><td colspan="7" class="empty-state">Data tidak tersedia.</td></tr>`;
-    } else {
-      tbody = data.prices.map((p, i) => `
+    const res=await fetch('/recent-prices?n=10',{headers:{'Accept':'application/json'}});
+    const data=await res.json();
+    if(!res.ok) throw new Error(data?.detail?.error||`HTTP ${res.status}`);
+    const tbody=(!data.prices||!data.prices.length)
+      ?`<tr><td colspan="7" class="empty-state">Data tidak tersedia.</td></tr>`
+      :data.prices.map((p,i)=>`
         <tr>
-          <td style="color:var(--muted);font-family:'DM Mono',monospace;font-size:11px">${i + 1}</td>
-          <td>
-            <span style="font-family:'DM Mono',monospace;font-size:12px;font-weight:600">${p.date}</span>
-            <span style="color:var(--muted);font-size:11px;margin-left:6px">${p.day}</span>
-          </td>
+          <td style="color:var(--muted);font-family:'DM Mono',monospace;font-size:11px">${i+1}</td>
+          <td><span style="font-family:'DM Mono',monospace;font-size:12px;font-weight:600">${p.date}</span> <span style="color:var(--muted);font-size:11px">${p.day}</span></td>
           <td style="color:var(--muted)">${fmtRp(p.open)}</td>
           <td style="color:var(--green)">${fmtRp(p.high)}</td>
           <td style="color:var(--red)">${fmtRp(p.low)}</td>
           <td style="font-weight:700;color:var(--accent)">${fmtRp(p.close)}</td>
           <td style="color:var(--muted);font-size:12px">${fmtVol(p.volume)}</td>
-        </tr>
-      `).join('');
-    }
-
-    document.getElementById('result').innerHTML = `
-      <div class="prices-wrap">
+        </tr>`).join('');
+    document.getElementById('result').innerHTML=`
+      <div class="table-wrap">
         <div class="section-header">
-          <div class="section-title prices-title">
-            📊 &nbsp; 10 Harga Saham Terakhir
-          </div>
+          <div class="section-title prices-title">📊 &nbsp; 10 Harga Saham Terakhir</div>
           <span class="section-count">TLKM.JK · terbaru di atas</span>
         </div>
-        <div style="overflow-x:auto">
-          <table>
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Tanggal</th>
-                <th>Open</th>
-                <th>High</th>
-                <th>Low</th>
-                <th>Close</th>
-                <th>Volume</th>
-              </tr>
-            </thead>
-            <tbody>${tbody}</tbody>
-          </table>
-        </div>
-      </div>
-    `;
-
-    document.getElementById('result').scrollIntoView({behavior:'smooth', block:'nearest'});
-
-  } catch (err) {
-    showError('Gagal memuat harga: ' + err.message);
-    showToast('Gagal memuat data harga', 'err');
+        <div style="overflow-x:auto"><table><thead><tr>
+          <th>#</th><th>Tanggal</th><th>Open</th><th>High</th><th>Low</th><th>Close</th><th>Volume</th>
+        </tr></thead><tbody>${tbody}</tbody></table></div>
+      </div>`;
+    document.getElementById('result').scrollIntoView({behavior:'smooth',block:'nearest'});
+  } catch(err){
+    showError('Gagal memuat harga: '+err.message); showToast('Gagal memuat data harga','err');
   } finally {
-    setBtnState('btn-prices','sp-prices','btn-prices-text', false, 'Lihat Harga Terakhir');
+    setBtnState('btn-prices','sp-prices','btn-prices-text',false,'Lihat Harga Terakhir');
   }
 }
+
+/* ── INIT ─────────────────────────────────────────── */
+document.addEventListener('DOMContentLoaded', () => {
+  loadChart('1M');
+});
 </script>
 </body>
 </html>
