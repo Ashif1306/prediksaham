@@ -173,10 +173,7 @@ def update_latest_data() -> None:
             raise FileNotFoundError(f"File tidak ditemukan: {DATA_PATH}")
 
         df_old = pd.read_csv(DATA_PATH, index_col=0, parse_dates=[0])
-
-        if not isinstance(df_old.index, pd.DatetimeIndex):
-            df_old.index = pd.to_datetime(df_old.index, errors="coerce")
-
+        df_old.index = pd.to_datetime(df_old.index, errors="coerce")
         df_old = df_old[~df_old.index.isna()].copy()
         df_old.index = pd.DatetimeIndex(df_old.index)
         df_old = df_old.sort_index()
@@ -189,7 +186,7 @@ def update_latest_data() -> None:
         fetch_start = (last_date + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
 
         print(f"[update_latest_data] Last date lama: {last_date.strftime('%Y-%m-%d')}")
-        print(f"[update_latest_data] Ambil data terbaru TLKM.JK mulai {fetch_start}...")
+
         df_new = yf.download(
             "TLKM.JK",
             start=fetch_start,
@@ -198,27 +195,22 @@ def update_latest_data() -> None:
             interval="1d",
         )
 
-        if df_new.empty:
-            print("[update_latest_data] Tidak ada data baru dari Yahoo Finance.")
-            return
-
         if isinstance(df_new.columns, pd.MultiIndex):
             df_new.columns = df_new.columns.get_level_values(0)
 
-        available_cols = [col for col in ["Open", "High", "Low", "Close", "Volume"] if col in df_new.columns]
-        if not available_cols:
-            print("[update_latest_data] Data baru tidak memiliki kolom OHLCV yang valid.")
+        if df_new.empty:
+            print("[update_latest_data] Jumlah baris data baru: 0")
+            print("[update_latest_data] Tidak ada data baru.")
             return
 
-        df_new = df_new[available_cols].copy()
+        df_new = df_new[[col for col in ["Open", "High", "Low", "Close", "Volume"] if col in df_new.columns]].copy()
         df_new.index = pd.to_datetime(df_new.index, errors="coerce")
         df_new = df_new[~df_new.index.isna()].copy()
         df_new.index = pd.DatetimeIndex(df_new.index)
         df_new = df_new.sort_index()
-
         df_new = df_new[df_new.index > last_date].copy()
-        print(f"[update_latest_data] Jumlah baris data baru: {len(df_new)}")
 
+        print(f"[update_latest_data] Jumlah baris data baru: {len(df_new)}")
         if df_new.empty:
             print("[update_latest_data] Tidak ada data baru.")
             return
@@ -232,7 +224,6 @@ def update_latest_data() -> None:
 
         combined.to_csv(DATA_PATH)
         print(f"[update_latest_data] Last date setelah update: {combined.index[-1].strftime('%Y-%m-%d')}")
-        print(f"[update_latest_data] Update sukses. Total data: {len(combined)} baris")
     except Exception as exc:
         # Jangan sampai endpoint /predict crash hanya karena update data gagal
         print(f"[update_latest_data] ERROR: {exc}")
