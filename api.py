@@ -23,6 +23,7 @@ import numpy as np
 import pandas as pd
 from datetime import datetime
 from contextlib import asynccontextmanager
+import yfinance as yf
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
@@ -162,7 +163,82 @@ def create_features(df: pd.DataFrame) -> pd.DataFrame:
 # =============================================================================
 # LOAD DATA
 # =============================================================================
-def load_feature_data() -> pd.DataFrame:
+def update_latest_data() -> None:
+    """
+    Perbarui dataset harga TLKM terbaru dari Yahoo Finance.
+    Tidak melakukan retraining model/scaler, hanya update data mentah.
+    """
+    try:
+        if not os.path.exists(DATA_PATH):
+            raise FileNotFoundError(f"File tidak ditemukan: {DATA_PATH}")
+
+        df_old = pd.read_csv(DATA_PATH, index_col=0, parse_dates=[0])
+
+        if not isinstance(df_old.index, pd.DatetimeIndex):
+            df_old.index = pd.to_datetime(df_old.index, errors="coerce")
+
+        df_old = df_old[~df_old.index.isna()].copy()
+        df_old.index = pd.DatetimeIndex(df_old.index)
+        df_old = df_old.sort_index()
+
+        if df_old.empty:
+            print("[update_latest_data] Dataset lama kosong. Update dibatalkan.")
+            return
+
+        last_date = df_old.index[-1]
+        start_date = last_date.strftime("%Y-%m-%d")
+
+        print(f"[update_latest_data] Ambil data terbaru TLKM.JK dari {start_date}...")
+        df_new = yf.download(
+            "TLKM.JK",
+            start=start_date,
+            progress=False,
+            auto_adjust=False,
+            interval="1d",
+        )
+
+        if df_new.empty:
+            print("[update_latest_data] Tidak ada data baru dari Yahoo Finance.")
+            return
+
+        if isinstance(df_new.columns, pd.MultiIndex):
+            df_new.columns = df_new.columns.get_level_values(0)
+
+        available_cols = [col for col in ["Open", "High", "Low", "Close", "Volume"] if col in df_new.columns]
+        if not available_cols:
+            print("[update_latest_data] Data baru tidak memiliki kolom OHLCV yang valid.")
+            return
+
+        df_new = df_new[available_cols].copy()
+        df_new.index = pd.to_datetime(df_new.index, errors="coerce")
+        df_new = df_new[~df_new.index.isna()].copy()
+        df_new.index = pd.DatetimeIndex(df_new.index)
+        df_new = df_new.sort_index()
+
+        if len(df_new) <= 1 and df_new.index[-1] <= last_date:
+            print("[update_latest_data] Tidak ada data baru setelah tanggal terakhir dataset lama.")
+            return
+
+        combined = pd.concat([df_old, df_new], axis=0)
+        combined.index = pd.to_datetime(combined.index, errors="coerce")
+        combined = combined[~combined.index.isna()].copy()
+        combined.index = pd.DatetimeIndex(combined.index)
+        combined = combined[~combined.index.duplicated(keep="last")]
+        combined = combined.sort_index()
+
+        added_rows = len(combined) - len(df_old)
+        combined.to_csv(DATA_PATH)
+
+        if added_rows > 0:
+            print(f"[update_latest_data] Update sukses. Baris baru ditambahkan: {added_rows}")
+        else:
+            print("[update_latest_data] Tidak ada baris baru untuk ditambahkan.")
+    except Exception as exc:
+        # Jangan sampai endpoint /predict crash hanya karena update data gagal
+        print(f"[update_latest_data] ERROR: {exc}")
+
+
+def load_and_prepare_data() -> pd.DataFrame:
     if not os.path.exists(DATA_PATH):
         raise FileNotFoundError(f"File tidak ditemukan: {DATA_PATH}")
 
@@ -189,7 +265,7 @@ def load_feature_data() -> pd.DataFrame:
 # =============================================================================
 # INFERENCE (NO FIT, NO SAVE)
 # =============================================================================
-def run_inference(model, scaler, df_feat: pd.DataFrame) -> dict:
+def predict_next_trading_day(model, scaler, df_feat: pd.DataFrame) -> dict:
     last_window        = df_feat[FEATURE_COLS].iloc[-WINDOW_SIZE:].values
     last_window_scaled = scaler.transform(last_window)          # NO FIT
     X_pred             = last_window_scaled.reshape(1, WINDOW_SIZE, len(FEATURE_COLS))
@@ -335,8 +411,10 @@ def predict_next_day():
             "detail": "Restart server dan tunggu hingga startup selesai.",
         })
 
+    update_latest_data()
+
     try:
-        df_feat = load_feature_data()
+        df_feat = load_and_prepare_data()
         print(f"[GET /predict] Data loaded: {len(df_feat)} baris")
     except Exception as exc:
         print(f"[GET /predict] ERROR load data: {exc}")
@@ -345,7 +423,7 @@ def predict_next_day():
         }) from exc
 
     try:
-        result = run_inference(app_state["model"], app_state["scaler"], df_feat)
+        result = predict_next_trading_day(app_state["model"], app_state["scaler"], df_feat)
         print(f"[GET /predict] Inferensi selesai: {result['predicted_price']}")
     except Exception as exc:
         print(f"[GET /predict] ERROR inferensi: {exc}")
