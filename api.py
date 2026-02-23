@@ -173,7 +173,7 @@ def update_latest_data() -> None:
             raise FileNotFoundError(f"File tidak ditemukan: {DATA_PATH}")
 
         df_old = pd.read_csv(DATA_PATH, index_col=0, parse_dates=[0])
-        df_old.index = pd.to_datetime(df_old.index, errors="coerce")
+        df_old.index = pd.to_datetime(df_old.index, errors="coerce", utc=True).tz_localize(None)
         df_old = df_old[~df_old.index.isna()].copy()
         df_old.index = pd.DatetimeIndex(df_old.index)
         df_old = df_old.sort_index()
@@ -204,7 +204,7 @@ def update_latest_data() -> None:
             return
 
         df_new = df_new[[col for col in ["Open", "High", "Low", "Close", "Volume"] if col in df_new.columns]].copy()
-        df_new.index = pd.to_datetime(df_new.index, errors="coerce")
+        df_new.index = pd.to_datetime(df_new.index, errors="coerce", utc=True).tz_localize(None)
         df_new = df_new[~df_new.index.isna()].copy()
         df_new.index = pd.DatetimeIndex(df_new.index)
         df_new = df_new.sort_index()
@@ -216,7 +216,7 @@ def update_latest_data() -> None:
             return
 
         combined = pd.concat([df_old, df_new], axis=0)
-        combined.index = pd.to_datetime(combined.index, errors="coerce")
+        combined.index = pd.to_datetime(combined.index, errors="coerce", utc=True).tz_localize(None)
         combined = combined[~combined.index.isna()].copy()
         combined.index = pd.DatetimeIndex(combined.index)
         combined = combined[~combined.index.duplicated(keep="last")]
