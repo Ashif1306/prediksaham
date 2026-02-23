@@ -63,22 +63,6 @@ TARGET_COL = 'Close'
 # =============================================================================
 
 def create_features(df):
-    """
-    Membuat fitur teknikal untuk model regresi.
-
-    PENTING: Fungsi ini HARUS identik dengan fungsi yang digunakan saat training
-    untuk memastikan konsistensi fitur.
-
-    Kolom intermediate (RSI_14, RETURN_1D, dll.) dihitung sebagai variabel
-    lokal Python — tidak disimpan ke DataFrame — sehingga df yang dikembalikan
-    hanya berisi 11 kolom final FEATURE_COLS.
-
-    Args:
-        df (pd.DataFrame): DataFrame dengan kolom OHLCV.
-
-    Returns:
-        pd.DataFrame: DataFrame dengan tepat 11 kolom final.
-    """
     df = df.copy()
 
     if 'Close' not in df.columns:
@@ -262,27 +246,6 @@ def load_and_prepare_data():
 # =============================================================================
 
 def predict_next_trading_day(model, scaler, df_recent, verbose=True):
-    """
-    Prediksi harga saham untuk hari perdagangan berikutnya.
-
-    Args:
-        model: Trained Keras model (SimpleRNN).
-        scaler: Fitted MinMaxScaler dari training.
-        df_recent (pd.DataFrame): DataFrame dengan 11 kolom fitur final.
-        verbose (bool): Print detail proses prediksi. Default: True.
-
-    Returns:
-        dict: Hasil prediksi dengan metadata:
-            - predicted_price: float - harga prediksi (Rp)
-            - prediction_date: datetime - tanggal prediksi
-            - last_actual_date: datetime - tanggal data terakhir
-            - last_actual_price: float - harga terakhir (Rp)
-            - price_change: float - perubahan harga absolut (Rp)
-            - price_change_pct: float - perubahan harga persentase (%)
-
-    Raises:
-        ValueError: Jika data tidak cukup atau validasi gagal.
-    """
     if verbose:
         print("\n" + "="*70)
         print("PREDIKSI NEXT TRADING DAY")
@@ -520,3 +483,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+
