@@ -424,28 +424,26 @@ async function loadHistory() {
   try {
     // ── Panggil endpoint /history via fetch() ────────────────────────────
     const res  = await fetch('/history', { method:'GET', headers:{'Accept':'application/json'} });
-    const data = await res.json();
+    const history = await res.json();
 
     if (!res.ok) {
-      throw new Error(data?.detail?.error || data?.detail || `HTTP ${res.status}`);
+      throw new Error(history?.detail?.error || history?.detail || `HTTP ${res.status}`);
     }
 
     // ── Buat baris tabel ─────────────────────────────────────────────────
     let tbody;
-    if (!data.history || data.history.length === 0) {
-      tbody = `<tr><td colspan="8" class="empty-state">
+    if (!Array.isArray(history) || history.length === 0) {
+      tbody = `<tr><td colspan="6" class="empty-state">
         Belum ada riwayat.<br/>
-        <span style="font-size:12px;opacity:.6">Klik "Hasil Prediksi" terlebih dahulu.</span>
+        <span style="font-size:12px;opacity:.6">Klik "Klik untuk Melihat Hasil Prediksi" terlebih dahulu.</span>
       </td></tr>`;
     } else {
       // Loop seluruh data — urut terbaru (dari backend ORDER BY timestamp DESC)
-      tbody = data.history.map(row => `
+      tbody = history.map(row => `
         <tr>
-          <td style="color:var(--muted);font-family:'DM Mono',monospace;font-size:11px">${row.id}</td>
           <td style="font-family:'DM Mono',monospace;font-size:12px">${row.prediction_date}</td>
           <td style="font-weight:600;color:var(--accent)">${fmtRp(row.predicted_price)}</td>
           <td style="color:var(--muted)">${fmtRp(row.last_actual_price)}</td>
-          <td style="${ccStyle(row.price_change)};font-weight:500">${fmtChange(row.price_change)}</td>
           <td style="${ccStyle(row.price_change_pct)}">${fmtPct(row.price_change_pct)}</td>
           <td>${trendBadge(row.trend)}</td>
           <td style="color:var(--muted);font-size:11px;font-family:'DM Mono',monospace">${row.timestamp}</td>
@@ -458,18 +456,16 @@ async function loadHistory() {
       <div class="history-wrap">
         <div class="history-title">
           🗂️ &nbsp; Riwayat Prediksi
-          <span style="margin-left:auto;color:var(--muted);font-size:10px">${data.total} record</span>
+          <span style="margin-left:auto;color:var(--muted);font-size:10px">${Array.isArray(history) ? history.length : 0} record</span>
         </div>
         <table>
           <thead>
             <tr>
-              <th>#</th>
-              <th>Tgl Prediksi</th>
-              <th>Harga Prediksi</th>
-              <th>Harga Terakhir</th>
-              <th>Perubahan</th>
-              <th>%</th>
-              <th>Tren</th>
+              <th>Prediction Date</th>
+              <th>Predicted Price</th>
+              <th>Last Actual Price</th>
+              <th>Change %</th>
+              <th>Trend</th>
               <th>Timestamp</th>
             </tr>
           </thead>

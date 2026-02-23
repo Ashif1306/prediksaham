@@ -34,6 +34,10 @@ from tensorflow import keras
 import joblib
 
 from calendar_utils import get_next_trading_day
+from predict_next_day import (
+    load_and_prepare_data,
+    predict_next_trading_day,
+)
 
 
 # =============================================================================
@@ -110,7 +114,7 @@ def save_prediction(result: dict) -> int:
             con.close()
 
 
-def fetch_history(limit: int = 100) -> list[dict]:
+def fetch_history() -> list[dict]:
     con = sqlite3.connect(DB_PATH)
     con.row_factory = sqlite3.Row
     try:
@@ -118,8 +122,7 @@ def fetch_history(limit: int = 100) -> list[dict]:
             """SELECT id, prediction_date, predicted_price, last_actual_price,
                       price_change, price_change_pct, trend, timestamp
                FROM prediction_history
-               ORDER BY timestamp DESC LIMIT ?""",
-            (limit,),
+               ORDER BY timestamp DESC""",
         ).fetchall()
         return [dict(r) for r in rows]
     finally:
@@ -302,11 +305,6 @@ class PredictionResponse(BaseModel):
     saved_id         : int = Field(..., description="ID di SQLite")
 
 
-class HistoryResponse(BaseModel):
-    total  : int
-    history: list[dict]
-
-
 # =============================================================================
 # ENDPOINT: GET /
 # =============================================================================
@@ -336,7 +334,7 @@ def predict_next_day():
         })
 
     try:
-        df_feat = load_feature_data()
+        df_feat = load_and_prepare_data()
         print(f"[GET /predict] Data loaded: {len(df_feat)} baris")
     except Exception as exc:
         print(f"[GET /predict] ERROR load data: {exc}")
@@ -345,7 +343,24 @@ def predict_next_day():
         }) from exc
 
     try:
-        result = run_inference(app_state["model"], app_state["scaler"], df_feat)
+        raw_result = predict_next_trading_day(
+            model=app_state["model"],
+            scaler=app_state["scaler"],
+            df_recent=df_feat,
+            verbose=False,
+        )
+        result = {
+            "predicted_price": round(raw_result["predicted_price"], 2),
+            "prediction_date": raw_result["prediction_date"].strftime("%Y-%m-%d"),
+            "prediction_day": raw_result["prediction_date"].strftime("%A"),
+            "last_actual_date": raw_result["last_actual_date"].strftime("%Y-%m-%d"),
+            "last_actual_day": raw_result["last_actual_date"].strftime("%A"),
+            "last_actual_price": round(raw_result["last_actual_price"], 2),
+            "price_change": round(raw_result["price_change"], 2),
+            "price_change_pct": round(raw_result["price_change_pct"], 4),
+            "trend": "bullish" if raw_result["price_change"] > 0 else "bearish" if raw_result["price_change"] < 0 else "flat",
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
         print(f"[GET /predict] Inferensi selesai: {result['predicted_price']}")
     except Exception as exc:
         print(f"[GET /predict] ERROR inferensi: {exc}")
@@ -368,15 +383,15 @@ def predict_next_day():
 # =============================================================================
 # ENDPOINT: GET /history
 # =============================================================================
-@app.get("/history", response_model=HistoryResponse, tags=["History"])
-def get_history(limit: int = 100):
+@app.get("/history", response_model=list[dict], tags=["History"])
+def get_history():
     """Riwayat prediksi dari SQLite, terbaru di atas."""
-    print(f"[GET /history] Request diterima, limit={limit}")
+    print("[GET /history] Request diterima")
 
     try:
-        rows = fetch_history(limit=limit)
+        rows = fetch_history()
         print(f"[GET /history] Mengembalikan {len(rows)} record")
-        return HistoryResponse(total=len(rows), history=rows)
+        return rows
     except Exception as exc:
         print(f"[GET /history] ERROR: {exc}")
         raise HTTPException(status_code=500, detail={
