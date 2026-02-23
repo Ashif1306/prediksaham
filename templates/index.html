@@ -85,8 +85,14 @@
       transition:transform .25s,border-color .25s,box-shadow .25s;
     }
     .action-card::before {
-      content:'';position:absolute;inset:0;opacity:0;
-      transition:opacity .3s;border-radius:inherit;
+      content:'';
+      position:absolute;
+      inset:0;
+      opacity:0;
+      transition:opacity .3s;
+      border-radius:inherit;
+
+      pointer-events: none;   /* ← TAMBAHKAN INI */
     }
     .action-card.primary::before   { background:radial-gradient(circle at 70% 0%,rgba(0,200,255,.14),transparent 70%); }
     .action-card.secondary::before { background:radial-gradient(circle at 70% 0%,rgba(10,245,176,.12),transparent 70%); }
